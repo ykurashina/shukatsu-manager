@@ -1,0 +1,84 @@
+/* ============================================
+   ES Manager View
+   ============================================ */
+
+.es-layout {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--sp-5);
+}
+
+.es-table-container {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+
+.es-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  padding: var(--sp-4);
+  border-bottom: 1px solid var(--border-light);
+  flex-wrap: wrap;
+}
+
+/* ES Editor */
+.es-editor {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: var(--sp-5);
+}
+
+.es-editor-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--sp-4);
+}
+
+.es-editor-title {
+  font-size: var(--text-md);
+  font-weight: var(--fw-semibold);
+}
+
+.es-editor-meta {
+  display: flex;
+  gap: var(--sp-4);
+  margin-bottom: var(--sp-4);
+  flex-wrap: wrap;
+}
+
+.es-meta-item {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+}
+.es-meta-item svg {
+  width: 14px;
+  height: 14px;
+}
+
+.es-editor-body textarea {
+  min-height: 280px;
+  font-size: var(--text-base);
+  line-height: var(--lh-relaxed);
+}
+
+/* Deadline */
+.es-deadline {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-1);
+  font-size: var(--text-xs);
+  white-space: nowrap;
+}
+.es-deadline svg {
+  width: 12px;
+  height: 12px;
+}

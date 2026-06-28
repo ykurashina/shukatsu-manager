@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="新卒就活を一元管理するブラウザアプリ。企業管理、ES管理、選考スケジュール、面接記録をまとめて管理できます。">
+  <title>就活管理</title>
+
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+JP:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+
+  <!-- CSS -->
+  <link rel="stylesheet" href="css/variables.css">
+  <link rel="stylesheet" href="css/base.css">
+  <link rel="stylesheet" href="css/layout.css">
+  <link rel="stylesheet" href="css/components.css">
+  <link rel="stylesheet" href="css/dashboard.css">
+  <link rel="stylesheet" href="css/table.css">
+  <link rel="stylesheet" href="css/kanban.css">
+  <link rel="stylesheet" href="css/calendar.css">
+  <link rel="stylesheet" href="css/es-manager.css">
+  <link rel="stylesheet" href="css/bookmarks.css">
+</head>
+<body>
+  <!-- 初回起動時の保存先選択画面 -->
+  <div id="setup-screen" class="setup-screen" style="display: none;">
+    <div class="setup-card">
+      <div class="setup-header">
+        <div class="setup-icon">
+          <i data-lucide="briefcase-business"></i>
+        </div>
+        <h1>就活管理</h1>
+        <p class="setup-subtitle">新卒就活を一元管理するアプリへようこそ</p>
+      </div>
+
+      <h2 class="setup-section-title">データの保存先を選んでください</h2>
+
+      <div class="setup-options">
+        <!-- ファイル直接保存モード -->
+        <div class="setup-option setup-option-recommended" id="setup-file-mode">
+          <div class="setup-option-badge">推奨</div>
+          <div class="setup-option-icon">
+            <i data-lucide="hard-drive"></i>
+          </div>
+          <h3>パソコン内のファイルに保存</h3>
+          <p>Google DriveやOneDriveフォルダ内にデータファイルを作成し、直接読み書きします。キャッシュクリアでもデータが消えません。</p>
+          <div class="setup-option-actions">
+            <button class="btn btn-primary" id="setup-create-file">新しいデータファイルを作成</button>
+            <button class="btn btn-secondary" id="setup-open-file">既存のデータファイルを開く</button>
+          </div>
+          <p class="setup-note"><i data-lucide="info" style="width:14px;height:14px;"></i> Chrome / Edge でのみ利用可能です</p>
+        </div>
+
+        <!-- ブラウザ内保存モード -->
+        <div class="setup-option" id="setup-local-mode">
+          <div class="setup-option-icon">
+            <i data-lucide="globe"></i>
+          </div>
+          <h3>ブラウザ内に保存</h3>
+          <p>ブラウザのLocalStorageにデータを保存します。すぐに使い始められますが、ブラウザの履歴クリアでデータが消える可能性があります。</p>
+          <button class="btn btn-secondary" id="setup-local-btn">ブラウザ内保存で開始</button>
+          <p class="setup-note warning"><i data-lucide="alert-triangle" style="width:14px;height:14px;"></i> 定期的なバックアップが必要です</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- メインアプリケーション -->
+  <div id="app" class="app-layout" style="display: none;">
+    <!-- ヘッダー -->
+    <header class="app-header" id="app-header">
+      <button class="mobile-menu-btn" id="mobile-menu-btn" aria-label="メニュー">
+        <i data-lucide="menu"></i>
+      </button>
+      <div class="header-title" id="header-title"></div>
+      <div class="storage-indicator" id="storage-indicator"></div>
+    </header>
+
+    <!-- サイドバー -->
+    <aside class="sidebar" id="sidebar"></aside>
+
+    <!-- メインコンテンツ -->
+    <main class="main-content" id="main-content"></main>
+  </div>
+
+  <!-- ファイルエラー時のリカバリー画面 -->
+  <div id="file-error-screen" class="setup-screen" style="display: none;">
+    <div class="setup-card">
+      <div class="setup-header">
+        <div class="setup-icon error">
+          <i data-lucide="file-warning"></i>
+        </div>
+        <h1>ファイルに接続できません</h1>
+        <p class="setup-subtitle">データファイルが移動・削除された可能性があります</p>
+      </div>
+      <div class="setup-options" style="grid-template-columns: 1fr;">
+        <div class="setup-option">
+          <button class="btn btn-primary" id="reconnect-file">ファイルを再選択する</button>
+          <button class="btn btn-secondary" id="switch-to-local" style="margin-top: 12px;">ブラウザ内保存に切り替える</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- アプリのJS（ES Modules） -->
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>

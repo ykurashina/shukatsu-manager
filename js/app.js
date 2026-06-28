@@ -1,0 +1,211 @@
+// app.js — メインアプリケーションエントリーポイント
+
+import { Store } from './store.js';
+import { Router } from './router.js';
+import { Sidebar } from './components/sidebar.js';
+import { Toast } from './components/toast.js';
+
+// Views
+import * as DashboardView from './views/dashboard.js';
+import * as CompaniesView from './views/companies.js';
+import * as KanbanView from './views/kanban.js';
+import * as ESManagerView from './views/es-manager.js';
+import * as CalendarView from './views/calendar.js';
+import * as InterviewsView from './views/interviews.js';
+import * as NotesView from './views/notes.js';
+import * as BookmarksView from './views/bookmarks.js';
+import * as SettingsView from './views/settings.js';
+
+// ヘッダータイトルマッピング
+const PAGE_TITLES = {
+  dashboard: 'ダッシュボード',
+  companies: '企業管理',
+  kanban: 'カンバンボード',
+  'es-manager': 'ES管理',
+  calendar: 'カレンダー',
+  interviews: '面接記録',
+  notes: '自己分析ノート',
+  bookmarks: 'ブックマーク',
+  settings: '設定'
+};
+
+class App {
+  constructor() {
+    this.router = new Router();
+    this.sidebar = null;
+  }
+
+  async start() {
+    // ストアの初期化
+    await Store.init();
+
+    // 保存モードが未選択 → セットアップ画面を表示
+    if (!Store.isStorageModeSelected) {
+      this._showSetupScreen();
+      return;
+    }
+
+    // ファイルモードで接続が切れている場合
+    if (Store.isFileMode && !Store.isFileConnected) {
+      // 自動再接続は要求しない（ユーザージェスチャーが必要）
+      // 直接アプリを表示して、ファイル再接続ボタンを提供
+    }
+
+    this._showApp();
+  }
+
+  _showSetupScreen() {
+    const setupScreen = document.getElementById('setup-screen');
+    const app = document.getElementById('app');
+    setupScreen.style.display = '';
+    app.style.display = 'none';
+
+    // File System Access API サポートチェック
+    if (!Store.supportsFileSystemAccess()) {
+      const fileOption = document.getElementById('setup-file-mode');
+      fileOption.style.opacity = '0.5';
+      fileOption.style.pointerEvents = 'none';
+      const note = fileOption.querySelector('.setup-note');
+      if (note) {
+        note.textContent = '⚠️ このブラウザではファイル保存は利用できません。Chrome/Edgeをご利用ください。';
+        note.classList.add('warning');
+      }
+    }
+
+    // 新しいファイルを作成
+    document.getElementById('setup-create-file').addEventListener('click', async () => {
+      const success = await Store.createNewFile();
+      if (success) {
+        Store.selectFileMode && (await Store.selectFileMode());
+        Toast.success('データファイルを作成しました');
+        setupScreen.style.display = 'none';
+        this._showApp();
+      }
+    });
+
+    // 既存ファイルを開く
+    document.getElementById('setup-open-file').addEventListener('click', async () => {
+      const success = await Store.selectFileMode();
+      if (success) {
+        Toast.success('データファイルを読み込みました');
+        setupScreen.style.display = 'none';
+        this._showApp();
+      }
+    });
+
+    // ブラウザ内保存
+    document.getElementById('setup-local-btn').addEventListener('click', () => {
+      Store.selectLocalMode();
+      Toast.info('ブラウザ内保存モードで開始します');
+      setupScreen.style.display = 'none';
+      this._showApp();
+    });
+
+    // Lucide アイコンを初期化
+    if (window.lucide) window.lucide.createIcons();
+  }
+
+  _showApp() {
+    const setupScreen = document.getElementById('setup-screen');
+    const app = document.getElementById('app');
+    const fileErrorScreen = document.getElementById('file-error-screen');
+
+    setupScreen.style.display = 'none';
+    fileErrorScreen.style.display = 'none';
+    app.style.display = '';
+
+    // サイドバー初期化
+    const sidebarEl = document.getElementById('sidebar');
+    this.sidebar = new Sidebar(sidebarEl, (route) => {
+      // モバイルでのサイドバー閉じ
+      this.sidebar.close();
+    });
+
+    // モバイルメニューボタン
+    document.getElementById('mobile-menu-btn').addEventListener('click', () => {
+      this.sidebar.open();
+    });
+
+    // ストレージインジケーター更新
+    this._updateStorageIndicator();
+
+    // ルーター初期化
+    this.router.setContainer(document.getElementById('main-content'));
+    this.router.register('dashboard', DashboardView);
+    this.router.register('companies', CompaniesView);
+    this.router.register('kanban', KanbanView);
+    this.router.register('es-manager', ESManagerView);
+    this.router.register('calendar', CalendarView);
+    this.router.register('interviews', InterviewsView);
+    this.router.register('notes', NotesView);
+    this.router.register('bookmarks', BookmarksView);
+    this.router.register('settings', SettingsView);
+
+    this.router.onNavigate((hash) => {
+      // サイドバーのアクティブ状態更新
+      this.sidebar.setActive(hash);
+      // ヘッダータイトル更新
+      document.getElementById('header-title').textContent = PAGE_TITLES[hash] || '';
+    });
+
+    this.router.start();
+
+    // ファイルエラー監視
+    Store.onDataChange((event) => {
+      if (event === 'file_error') {
+        this._showFileErrorScreen();
+      }
+    });
+
+    // Lucide アイコン初期化
+    if (window.lucide) window.lucide.createIcons();
+  }
+
+  _updateStorageIndicator() {
+    const indicator = document.getElementById('storage-indicator');
+    if (Store.isFileMode) {
+      indicator.className = 'storage-indicator file-mode';
+      indicator.innerHTML = `<i data-lucide="hard-drive" style="width:14px;height:14px;"></i> ファイル保存`;
+    } else {
+      indicator.className = 'storage-indicator local-mode';
+      indicator.innerHTML = `<i data-lucide="globe" style="width:14px;height:14px;"></i> ブラウザ内保存`;
+    }
+    if (window.lucide) window.lucide.createIcons();
+  }
+
+  _showFileErrorScreen() {
+    document.getElementById('app').style.display = 'none';
+    document.getElementById('file-error-screen').style.display = '';
+
+    document.getElementById('reconnect-file').addEventListener('click', async () => {
+      const success = await Store.reconnectFile();
+      if (success) {
+        Toast.success('ファイルに再接続しました');
+        document.getElementById('file-error-screen').style.display = 'none';
+        this._showApp();
+      }
+    });
+
+    document.getElementById('switch-to-local').addEventListener('click', () => {
+      Store.selectLocalMode();
+      Toast.info('ブラウザ内保存モードに切り替えました');
+      document.getElementById('file-error-screen').style.display = 'none';
+      this._showApp();
+    });
+
+    if (window.lucide) window.lucide.createIcons();
+  }
+}
+
+// --- アプリ起動 ---
+const app = new App();
+app.start().catch(console.error);
+
+// ハートビート機能（ブラウザが閉じられたらサーバーを自動終了させるため）
+function startHeartbeat() {
+  setInterval(() => {
+    fetch('/heartbeat').catch(() => {});
+  }, 3000);
+}
+startHeartbeat();
+

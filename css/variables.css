@@ -1,0 +1,120 @@
+/* ============================================
+   CSS Design Tokens — 就活管理
+   ============================================ */
+
+:root {
+  /* ---- Primary ---- */
+  --primary: #6366f1;
+  --primary-light: #818cf8;
+  --primary-lighter: #c7d2fe;
+  --primary-lightest: #eef2ff;
+  --primary-dark: #4f46e5;
+  --primary-gradient: linear-gradient(135deg, #6366f1, #818cf8);
+
+  /* ---- Surface / Background ---- */
+  --bg: #f8fafc;
+  --bg-alt: #f1f5f9;
+  --surface: #ffffff;
+  --surface-hover: #f8fafc;
+  --surface-active: #f1f5f9;
+
+  /* ---- Text ---- */
+  --text-primary: #0f172a;
+  --text-secondary: #64748b;
+  --text-tertiary: #94a3b8;
+  --text-inverse: #ffffff;
+
+  /* ---- Border ---- */
+  --border: #e2e8f0;
+  --border-light: #f1f5f9;
+  --border-focus: #6366f1;
+
+  /* ---- Status Colors ---- */
+  --status-interested: #94a3b8;
+  --status-es-drafting: #f59e0b;
+  --status-es-submitted: #3b82f6;
+  --status-webtest: #8b5cf6;
+  --status-interviewing: #06b6d4;
+  --status-offer: #10b981;
+  --status-declined: #6b7280;
+  --status-rejected: #ef4444;
+
+  /* ---- Priority Colors ---- */
+  --priority-s: #ef4444;
+  --priority-a: #f59e0b;
+  --priority-b: #3b82f6;
+  --priority-c: #94a3b8;
+
+  /* ---- Semantic ---- */
+  --success: #10b981;
+  --success-light: #d1fae5;
+  --warning: #f59e0b;
+  --warning-light: #fef3c7;
+  --error: #ef4444;
+  --error-light: #fee2e2;
+  --info: #3b82f6;
+  --info-light: #dbeafe;
+
+  /* ---- Typography ---- */
+  --font-family: 'Inter', 'Noto Sans JP', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+  --text-xs: 0.75rem;    /* 12px */
+  --text-sm: 0.8125rem;  /* 13px */
+  --text-base: 0.875rem; /* 14px */
+  --text-md: 1rem;       /* 16px */
+  --text-lg: 1.125rem;   /* 18px */
+  --text-xl: 1.25rem;    /* 20px */
+  --text-2xl: 1.5rem;    /* 24px */
+  --text-3xl: 1.875rem;  /* 30px */
+  --fw-regular: 400;
+  --fw-medium: 500;
+  --fw-semibold: 600;
+  --fw-bold: 700;
+  --lh-tight: 1.25;
+  --lh-normal: 1.5;
+  --lh-relaxed: 1.75;
+
+  /* ---- Spacing ---- */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 20px;
+  --sp-6: 24px;
+  --sp-8: 32px;
+  --sp-10: 40px;
+  --sp-12: 48px;
+  --sp-16: 64px;
+
+  /* ---- Border Radius ---- */
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  --radius-full: 9999px;
+
+  /* ---- Shadows ---- */
+  --shadow-xs: 0 1px 2px rgba(0,0,0,0.04);
+  --shadow-sm: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
+  --shadow-md: 0 4px 6px -1px rgba(0,0,0,0.07), 0 2px 4px -2px rgba(0,0,0,0.05);
+  --shadow-lg: 0 10px 15px -3px rgba(0,0,0,0.08), 0 4px 6px -4px rgba(0,0,0,0.04);
+  --shadow-xl: 0 20px 25px -5px rgba(0,0,0,0.1), 0 8px 10px -6px rgba(0,0,0,0.05);
+
+  /* ---- Layout ---- */
+  --sidebar-width: 240px;
+  --sidebar-collapsed-width: 64px;
+  --header-height: 56px;
+
+  /* ---- Transitions ---- */
+  --transition-fast: 0.15s ease;
+  --transition-base: 0.2s ease;
+  --transition-slow: 0.3s ease;
+
+  /* ---- Z-index ---- */
+  --z-sidebar: 100;
+  --z-header: 90;
+  --z-modal-overlay: 200;
+  --z-modal: 210;
+  --z-toast: 300;
+  --z-tooltip: 400;
+}

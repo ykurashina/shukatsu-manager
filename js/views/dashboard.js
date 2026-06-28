@@ -1,0 +1,299 @@
+// dashboard.js — ダッシュボードビュー
+
+import { Store, STATUS_LABELS, STATUS_COLORS, EVENT_TYPE_COLORS } from '../store.js';
+import { DateUtils } from '../utils/date.js';
+
+// イベントタイプの日本語ラベル
+const EVENT_TYPE_LABELS = {
+  es_deadline: 'ES締切',
+  interview: '面接',
+  briefing: '説明会',
+  webtest: 'Webテスト',
+  obog: 'OB/OG訪問',
+  other: 'その他'
+};
+
+let _container = null;
+let _unsubscribe = null;
+
+/**
+ * ダッシュボードをレンダリング
+ */
+export function render(container) {
+  _container = container;
+  _renderContent();
+}
+
+/**
+ * イベントリスナー・データ監視の登録
+ */
+export function init() {
+  // データ変更時に再レンダリング
+  _unsubscribe = Store.onDataChange(() => {
+    if (_container) {
+      _renderContent();
+    }
+  });
+
+  // 企業追加ボタン（空状態）のクリックハンドラ
+  _attachEventListeners();
+}
+
+/**
+ * クリーンアップ
+ */
+export function destroy() {
+  if (_unsubscribe) {
+    _unsubscribe();
+    _unsubscribe = null;
+  }
+  _container = null;
+}
+
+// ============================================
+//  内部関数
+// ============================================
+
+function _renderContent() {
+  const companies = Store.getCompanies();
+  const isEmpty = companies.length === 0;
+
+  if (isEmpty) {
+    _renderEmptyState();
+  } else {
+    _renderDashboard();
+  }
+
+  // Lucide アイコンを再描画
+  if (window.lucide) window.lucide.createIcons();
+
+  // イベントリスナーを再登録
+  _attachEventListeners();
+}
+
+/**
+ * 空状態の表示
+ */
+function _renderEmptyState() {
+  _container.innerHTML = `
+    <div class="empty-state">
+      <div class="empty-state-icon">
+        <i data-lucide="building-2"></i>
+      </div>
+      <h2>まだ企業が登録されていません</h2>
+      <p>企業を追加して、就活管理を始めましょう！</p>
+      <a href="#companies" class="btn btn-primary" id="dashboard-add-company-btn">
+        <i data-lucide="plus"></i>
+        企業を追加する
+      </a>
+    </div>
+  `;
+}
+
+/**
+ * ダッシュボード本体の表示
+ */
+function _renderDashboard() {
+  const stats = Store.getStats();
+  const upcomingEvents = Store.getUpcomingEvents(7);
+  const urgentActions = Store.getUrgentActions();
+
+  _container.innerHTML = `
+    <!-- KPIカード -->
+    ${_renderKPIGrid(stats)}
+
+    <!-- パネル -->
+    <div class="dashboard-panels">
+      ${_renderUpcomingEventsPanel(upcomingEvents)}
+      ${_renderUrgentActionsPanel(urgentActions)}
+    </div>
+  `;
+}
+
+/**
+ * KPIグリッドのHTML生成
+ */
+function _renderKPIGrid(stats) {
+  return `
+    <div class="dashboard-grid">
+      <div class="kpi-card">
+        <div class="kpi-icon total">
+          <i data-lucide="building-2"></i>
+        </div>
+        <div class="kpi-info">
+          <div class="kpi-label">登録企業数</div>
+          <div class="kpi-value">${stats.total}</div>
+        </div>
+      </div>
+
+      <div class="kpi-card">
+        <div class="kpi-icon active">
+          <i data-lucide="loader"></i>
+        </div>
+        <div class="kpi-info">
+          <div class="kpi-label">選考中</div>
+          <div class="kpi-value">${stats.active}</div>
+        </div>
+      </div>
+
+      <div class="kpi-card">
+        <div class="kpi-icon offers">
+          <i data-lucide="trophy"></i>
+        </div>
+        <div class="kpi-info">
+          <div class="kpi-label">内定</div>
+          <div class="kpi-value">${stats.offers}</div>
+        </div>
+      </div>
+
+      <div class="kpi-card">
+        <div class="kpi-icon events">
+          <i data-lucide="calendar-clock"></i>
+        </div>
+        <div class="kpi-info">
+          <div class="kpi-label">今週の予定</div>
+          <div class="kpi-value">${stats.weeklyEvents}</div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+/**
+ * 直近の予定パネルのHTML生成
+ */
+function _renderUpcomingEventsPanel(events) {
+  const eventListHTML = events.length > 0
+    ? `<div class="event-list">${events.map(e => _renderEventItem(e)).join('')}</div>`
+    : `<p style="color: var(--text-tertiary); font-size: var(--text-sm); text-align: center; padding: var(--sp-4) 0;">直近7日間の予定はありません</p>`;
+
+  return `
+    <div class="dashboard-panel">
+      <div class="panel-header">
+        <div class="panel-title">
+          <i data-lucide="calendar-days"></i>
+          直近の予定
+        </div>
+        <a href="#calendar" class="btn btn-ghost btn-sm">すべて見る</a>
+      </div>
+      ${eventListHTML}
+    </div>
+  `;
+}
+
+/**
+ * イベントアイテム1件のHTML生成
+ */
+function _renderEventItem(event) {
+  const daysUntil = DateUtils.daysUntil(event.date);
+  const countdownLabel = DateUtils.daysUntilLabel(event.date);
+  const dateLabel = DateUtils.formatShortDate(event.date);
+  const typeLabel = EVENT_TYPE_LABELS[event.type] || 'その他';
+  const dotColor = event.color || EVENT_TYPE_COLORS[event.type] || '#94a3b8';
+
+  // カウントダウンの色分け
+  let countdownStyle = '';
+  if (daysUntil === 0) {
+    countdownStyle = 'background: #fef2f2; color: #dc2626;'; // 今日 → 赤
+  } else if (daysUntil === 1) {
+    countdownStyle = 'background: #fff7ed; color: #ea580c;'; // 明日 → オレンジ
+  } else if (daysUntil <= 3) {
+    countdownStyle = 'background: #fefce8; color: #ca8a04;'; // 3日以内 → 黄色
+  } else {
+    countdownStyle = 'background: #f0fdf4; color: #16a34a;'; // それ以降 → 緑
+  }
+
+  return `
+    <div class="event-item" data-company-id="${event.companyId || ''}">
+      <div class="event-dot" style="background-color: ${dotColor};"></div>
+      <div class="event-info">
+        <div class="event-title">${_escapeHTML(event.title)}</div>
+        <div class="event-date">${dateLabel} ・ ${typeLabel}</div>
+      </div>
+      <span class="event-countdown" style="${countdownStyle}">${countdownLabel}</span>
+    </div>
+  `;
+}
+
+/**
+ * 要アクションパネルのHTML生成
+ */
+function _renderUrgentActionsPanel(actions) {
+  const actionListHTML = actions.length > 0
+    ? actions.map(a => _renderActionItem(a)).join('')
+    : `<p style="color: var(--text-tertiary); font-size: var(--text-sm); text-align: center; padding: var(--sp-4) 0;">3日以内の緊急アクションはありません 🎉</p>`;
+
+  return `
+    <div class="dashboard-panel">
+      <div class="panel-header">
+        <div class="panel-title">
+          <i data-lucide="alert-triangle"></i>
+          要アクション
+        </div>
+      </div>
+      ${actionListHTML}
+    </div>
+  `;
+}
+
+/**
+ * アクションアイテム1件のHTML生成
+ */
+function _renderActionItem(action) {
+  const countdownLabel = DateUtils.daysUntilLabel(action.date);
+  const typeLabel = EVENT_TYPE_LABELS[action.type] || 'その他';
+
+  return `
+    <div class="action-item" data-company-id="${action.companyId || ''}">
+      <div class="action-item-icon">
+        <i data-lucide="alert-circle"></i>
+      </div>
+      <div class="action-item-text">
+        <strong>${_escapeHTML(action.title)}</strong>
+        <br>
+        <small>${typeLabel} ・ ${countdownLabel}</small>
+      </div>
+    </div>
+  `;
+}
+
+/**
+ * イベントリスナーを登録
+ */
+function _attachEventListeners() {
+  if (!_container) return;
+
+  // イベントアイテムのクリックで企業詳細へ遷移
+  const eventItems = _container.querySelectorAll('.event-item[data-company-id]');
+  eventItems.forEach(item => {
+    item.style.cursor = 'pointer';
+    item.addEventListener('click', () => {
+      const companyId = item.dataset.companyId;
+      if (companyId) {
+        window.location.hash = `companies?id=${companyId}`;
+      }
+    });
+  });
+
+  // アクションアイテムのクリックで企業詳細へ遷移
+  const actionItems = _container.querySelectorAll('.action-item[data-company-id]');
+  actionItems.forEach(item => {
+    item.style.cursor = 'pointer';
+    item.addEventListener('click', () => {
+      const companyId = item.dataset.companyId;
+      if (companyId) {
+        window.location.hash = `companies?id=${companyId}`;
+      }
+    });
+  });
+}
+
+/**
+ * HTMLエスケープ
+ */
+function _escapeHTML(str) {
+  if (!str) return '';
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}

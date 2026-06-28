@@ -1,0 +1,6 @@
+# 就活データ（個人情報を含むため管理対象外）
+*.json
+
+# Windows の一時ファイル
+Thumbs.db
+desktop.ini

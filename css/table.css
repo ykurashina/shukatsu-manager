@@ -1,0 +1,99 @@
+/* ============================================
+   Table View (Companies List)
+   ============================================ */
+
+.table-container {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+
+.table-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  padding: var(--sp-4);
+  border-bottom: 1px solid var(--border-light);
+  flex-wrap: wrap;
+}
+
+.table-toolbar-left {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  flex-wrap: wrap;
+  flex: 1;
+}
+
+.table-toolbar-right {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+}
+
+.table-scroll {
+  overflow-x: auto;
+}
+
+/* Company name cell */
+.company-name-cell {
+  font-weight: var(--fw-medium);
+  color: var(--primary);
+  cursor: pointer;
+}
+.company-name-cell:hover {
+  text-decoration: underline;
+}
+
+/* Table row actions */
+.row-actions {
+  display: flex;
+  gap: var(--sp-1);
+  opacity: 0;
+  transition: opacity var(--transition-fast);
+}
+tr:hover .row-actions {
+  opacity: 1;
+}
+
+/* Bulk Actions Bar */
+.bulk-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: var(--sp-3) var(--sp-4);
+  background: var(--primary-lightest);
+  border-bottom: 1px solid var(--primary-lighter);
+  font-size: var(--text-sm);
+}
+
+.bulk-count {
+  font-weight: var(--fw-semibold);
+  color: var(--primary);
+}
+
+/* Sort indicator */
+th.sortable {
+  cursor: pointer;
+  user-select: none;
+}
+th.sortable:hover {
+  color: var(--primary);
+}
+th .sort-arrow {
+  font-size: 10px;
+  margin-left: 4px;
+  opacity: 0.3;
+}
+th.sort-asc .sort-arrow,
+th.sort-desc .sort-arrow {
+  opacity: 1;
+  color: var(--primary);
+}
+
+/* Next Date column */
+.next-date-cell {
+  white-space: nowrap;
+}
