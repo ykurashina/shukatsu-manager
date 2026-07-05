@@ -5,6 +5,7 @@ import { Modal } from '../components/modal.js';
 import { Toast } from '../components/toast.js';
 import { FormUtils } from '../components/form-utils.js';
 import { DateUtils } from '../utils/date.js';
+import { searchCompanyByGBiz } from '../utils/api.js';
 
 // ---------------------
 // 状態管理
@@ -421,12 +422,52 @@ function openCompanyFormModal(companyId = null) {
   form.className = 'modal-form';
 
   // 企業名（必須）
+  const nameInput = FormUtils.createInput('text', '例：株式会社○○', company.name || '', { name: 'name', required: true });
   form.appendChild(
-    FormUtils.createFormGroup('企業名',
-      FormUtils.createInput('text', '例：株式会社○○', company.name || '', { name: 'name', required: true }),
-      { required: true }
-    )
+    FormUtils.createFormGroup('企業名', nameInput, { required: true })
   );
+
+  // gBizINFO API 検索ボタン（トークンが設定されている場合のみ表示）
+  const gbizToken = Store.getSettings().gbizToken;
+  if (gbizToken) {
+    const gbizRow = document.createElement('div');
+    gbizRow.style.cssText = 'display:flex; gap:var(--sp-2); align-items:center; margin-bottom:var(--sp-3);';
+    const gbizBtn = document.createElement('button');
+    gbizBtn.type = 'button';
+    gbizBtn.className = 'btn btn-secondary btn-sm';
+    gbizBtn.innerHTML = '<i data-lucide="search" style="width:14px;height:14px;"></i> gBizINFOで企業情報を検索';
+    const gbizResult = document.createElement('span');
+    gbizResult.style.cssText = 'font-size:var(--text-xs); color:var(--text-tertiary);';
+    gbizBtn.addEventListener('click', async () => {
+      const companyName = nameInput.value.trim();
+      if (!companyName) { Toast.show('企業名を先に入力してください', 'warning'); return; }
+      gbizResult.textContent = '検索中...';
+      const info = await searchCompanyByGBiz(companyName, gbizToken);
+      if (info) {
+        gbizResult.textContent = `✅ ${info.name} が見つかりました`;
+        // メモ欄に自動入力
+        const memoEl = form.querySelector('[name="memo"]');
+        if (memoEl) {
+          const autoInfo = [
+            info.location ? `所在地: ${info.location}` : '',
+            info.capitalStock ? `資本金: ${info.capitalStock}` : '',
+            info.employeeNumber ? `従業員数: ${info.employeeNumber}人` : '',
+            info.dateOfEstablishment ? `設立: ${info.dateOfEstablishment}` : '',
+          ].filter(Boolean).join('\n');
+          const textarea = memoEl.tagName === 'TEXTAREA' ? memoEl : memoEl.querySelector('textarea');
+          if (textarea) {
+            textarea.value = textarea.value ? textarea.value + '\n---\n' + autoInfo : autoInfo;
+          }
+        }
+        Toast.show('企業情報をメモに追加しました', 'success');
+      } else {
+        gbizResult.textContent = '❓ 企業が見つかりませんでした';
+      }
+    });
+    gbizRow.appendChild(gbizBtn);
+    gbizRow.appendChild(gbizResult);
+    form.appendChild(gbizRow);
+  }
 
   // 業界
   form.appendChild(

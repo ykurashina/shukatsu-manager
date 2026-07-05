@@ -2,6 +2,7 @@
 
 import { Store, STATUS_LABELS, STATUS_COLORS, EVENT_TYPE_COLORS } from '../store.js';
 import { DateUtils } from '../utils/date.js';
+import { fetchNewsFromRSS } from '../utils/api.js';
 
 // イベントタイプの日本語ラベル
 const EVENT_TYPE_LABELS = {
@@ -107,7 +108,13 @@ function _renderDashboard() {
       ${_renderUpcomingEventsPanel(upcomingEvents)}
       ${_renderUrgentActionsPanel(urgentActions)}
     </div>
+
+    <!-- ニュースフィード -->
+    ${_renderNewsFeedPanel()}
   `;
+
+  // ニュースの非同期読み込み
+  _loadNewsFeed();
 }
 
 /**
@@ -286,6 +293,75 @@ function _attachEventListeners() {
       }
     });
   });
+}
+
+/**
+ * ニュースフィードパネルのHTML生成（初期はローディング表示）
+ */
+function _renderNewsFeedPanel() {
+  return `
+    <div class="dashboard-panel" style="grid-column: 1 / -1; margin-top: var(--sp-2);">
+      <div class="panel-header">
+        <div class="panel-title">
+          <i data-lucide="newspaper"></i>
+          就活ニュース
+        </div>
+        <button class="btn btn-ghost btn-sm" id="news-refresh-btn">
+          <i data-lucide="refresh-cw"></i> 更新
+        </button>
+      </div>
+      <div id="news-feed-content" style="padding: var(--sp-3);">
+        <p style="color: var(--text-tertiary); font-size: var(--text-sm); text-align: center;">ニュースを読み込み中...</p>
+      </div>
+    </div>
+  `;
+}
+
+/**
+ * ニュースフィードを非同期で読み込み・表示
+ */
+async function _loadNewsFeed() {
+  const settings = Store.getSettings();
+  const feedUrl = settings.rssFeedUrl;
+  const container = document.getElementById('news-feed-content');
+  const refreshBtn = document.getElementById('news-refresh-btn');
+
+  if (!feedUrl || !container) {
+    if (container) {
+      container.innerHTML = '<p style="color: var(--text-tertiary); font-size: var(--text-sm); text-align: center;">RSSフィードURLが設定されていません</p>';
+    }
+    return;
+  }
+
+  // 更新ボタンのイベント
+  refreshBtn?.addEventListener('click', () => _loadNewsFeed());
+
+  try {
+    const articles = await fetchNewsFromRSS(feedUrl, 5);
+
+    if (articles.length === 0) {
+      container.innerHTML = '<p style="color: var(--text-tertiary); font-size: var(--text-sm); text-align: center;">ニュースが取得できませんでした</p>';
+      return;
+    }
+
+    container.innerHTML = articles.map(article => `
+      <a href="${article.link}" target="_blank" rel="noopener noreferrer" class="news-item" style="
+        display: flex; gap: var(--sp-3); padding: var(--sp-3); border-radius: var(--radius-md);
+        text-decoration: none; color: inherit; transition: background var(--transition-fast);
+        border-bottom: 1px solid var(--border-light);
+      " onmouseover="this.style.background='var(--surface-hover)'" onmouseout="this.style.background='transparent'">
+        <div style="flex:1; min-width:0;">
+          <div style="font-size: var(--text-sm); font-weight: var(--fw-medium); color: var(--text-primary); margin-bottom: 2px;">${_escapeHTML(article.title)}</div>
+          <div style="font-size: var(--text-xs); color: var(--text-tertiary);">${article.pubDate ? new Date(article.pubDate).toLocaleDateString('ja-JP') : ''}</div>
+        </div>
+        <i data-lucide="external-link" style="width:14px;height:14px;color:var(--text-tertiary);flex-shrink:0;margin-top:2px;"></i>
+      </a>
+    `).join('');
+
+    if (window.lucide) window.lucide.createIcons();
+  } catch (err) {
+    container.innerHTML = '<p style="color: var(--text-tertiary); font-size: var(--text-sm); text-align: center;">ニュースの読み込みに失敗しました</p>';
+  }
 }
 
 /**

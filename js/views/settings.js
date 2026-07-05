@@ -93,6 +93,28 @@ function _renderContent() {
       </div>
     </div>
 
+    <!-- gBizINFO API連携 -->
+    <div class="settings-section">
+      <h2 class="settings-section-title">
+        <i data-lucide="globe"></i> gBizINFO API連携
+      </h2>
+      <div class="settings-row">
+        <div style="flex:1;">
+          <div class="settings-label">APIトークン</div>
+          <div class="settings-description">企業情報（資本金・住所等）の自動取得に使用します。<br>
+            <a href="https://info.gbiz.go.jp/hojin/APIUseTop" target="_blank" rel="noopener noreferrer" style="color:var(--primary);">APIトークンの無料申請はこちら（経産省 gBizINFO）</a>
+          </div>
+          <div style="display:flex; gap:var(--sp-2); margin-top:var(--sp-2); max-width:480px;">
+            <input type="text" class="form-input" id="gbiz-token-input"
+                   placeholder="トークンを入力（未設定でもアプリは動作します）"
+                   value="${settings.gbizToken || ''}" style="flex:1;">
+            <button class="btn btn-primary btn-sm" id="gbiz-token-save-btn">保存</button>
+            ${settings.gbizToken ? '<button class="btn btn-secondary btn-sm" id="gbiz-token-clear-btn">削除</button>' : ''}
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- アプリ情報 -->
     <div class="settings-section">
       <h2 class="settings-section-title">
@@ -101,7 +123,7 @@ function _renderContent() {
       <div class="settings-row">
         <div>
           <div class="settings-label">就活管理</div>
-          <div class="settings-description">バージョン 1.0.0 — ブラウザベースの新卒就活管理アプリ</div>
+          <div class="settings-description">バージョン 1.1.0 — ブラウザベースの新卒就活管理アプリ</div>
         </div>
       </div>
       <div class="settings-row">
@@ -190,6 +212,22 @@ function _renderContent() {
       Toast.success('全データを削除しました');
       _renderContent();
     });
+  });
+
+  // gBizINFO APIトークン保存
+  _container.querySelector('#gbiz-token-save-btn')?.addEventListener('click', () => {
+    const tokenInput = _container.querySelector('#gbiz-token-input');
+    const token = tokenInput?.value?.trim() || '';
+    Store.updateSettings({ gbizToken: token });
+    Toast.success('APIトークンを保存しました');
+    _renderContent();
+  });
+
+  // gBizINFO APIトークン削除
+  _container.querySelector('#gbiz-token-clear-btn')?.addEventListener('click', () => {
+    Store.updateSettings({ gbizToken: '' });
+    Toast.success('APIトークンを削除しました');
+    _renderContent();
   });
 
   if (window.lucide) window.lucide.createIcons();

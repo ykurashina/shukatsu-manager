@@ -1,6 +1,6 @@
 // es-manager.js — ES管理ビュー
 
-import { Store, ES_STATUS_OPTIONS, ES_STATUS_LABELS } from '../store.js';
+import { Store, ES_STATUS_OPTIONS, ES_STATUS_LABELS, NOTE_CATEGORY_LABELS } from '../store.js';
 import { Modal } from '../components/modal.js';
 import { Toast } from '../components/toast.js';
 import { FormUtils } from '../components/form-utils.js';
@@ -167,6 +167,54 @@ function _openESModal(esId) {
     { name: 'content', rows: 12 }
   );
   content.appendChild(FormUtils.createFormGroup('回答内容', textWrapper));
+
+  // 「自己分析ノートから挿入」ボタン
+  const notes = Store.getNotes();
+  if (notes.length > 0) {
+    const insertSection = document.createElement('div');
+    insertSection.style.cssText = 'margin-top: var(--sp-2); margin-bottom: var(--sp-3);';
+
+    const insertLabel = document.createElement('div');
+    insertLabel.style.cssText = 'font-size: var(--text-xs); color: var(--text-secondary); margin-bottom: var(--sp-1); font-weight: var(--fw-medium);';
+    insertLabel.textContent = 'ネタ帳から挿入';
+    insertSection.appendChild(insertLabel);
+
+    const insertRow = document.createElement('div');
+    insertRow.style.cssText = 'display:flex; gap:var(--sp-2); align-items:center; flex-wrap:wrap;';
+
+    // ノート選択ドロップダウン
+    const noteSelect = document.createElement('select');
+    noteSelect.className = 'form-select';
+    noteSelect.style.cssText = 'flex:1; min-width:200px;';
+    noteSelect.innerHTML = '<option value="">— ネタを選択 —</option>' +
+      notes.map(n => `<option value="${n.id}">${NOTE_CATEGORY_LABELS[n.category] || n.category}: ${n.title || '(無題)'}</option>`).join('');
+    insertRow.appendChild(noteSelect);
+
+    // 挿入ボタン
+    const insertBtn = document.createElement('button');
+    insertBtn.type = 'button';
+    insertBtn.className = 'btn btn-secondary btn-sm';
+    insertBtn.innerHTML = '<i data-lucide="clipboard-paste" style="width:14px;height:14px;"></i> 挿入';
+    insertBtn.addEventListener('click', () => {
+      const selectedId = noteSelect.value;
+      if (!selectedId) { Toast.warning('ネタを選択してください'); return; }
+      const note = Store.getNote(selectedId);
+      if (!note || !note.content) { Toast.warning('ネタの内容が空です'); return; }
+      const textarea = textWrapper.querySelector('textarea');
+      if (textarea) {
+        const cursorPos = textarea.selectionStart;
+        const before = textarea.value.substring(0, cursorPos);
+        const after = textarea.value.substring(cursorPos);
+        textarea.value = before + note.content + after;
+        textarea.dispatchEvent(new Event('input')); // 文字数カウント更新のため
+        Toast.success(`「${note.title}」を挿入しました`);
+      }
+    });
+    insertRow.appendChild(insertBtn);
+
+    insertSection.appendChild(insertRow);
+    content.appendChild(insertSection);
+  }
 
   Modal.open({
     title: isEdit ? 'ES編集' : 'ES追加',
