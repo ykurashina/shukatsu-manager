@@ -45,6 +45,12 @@ class App {
       return;
     }
 
+    // Googleモードで再訪問時: トークンが切れているので再ログインが必要
+    if (Store.isGoogleMode && !Store.isGoogleConnected) {
+      this._showSetupScreen();
+      return;
+    }
+
     // ファイルモードで接続が切れている場合
     if (Store.isFileMode && !Store.isFileConnected) {
       // 自動再接続は要求しない（ユーザージェスチャーが必要）
@@ -101,6 +107,23 @@ class App {
       this._showApp();
     });
 
+    // Googleドライブ同期
+    document.getElementById('setup-google-btn')?.addEventListener('click', async () => {
+      const btn = document.getElementById('setup-google-btn');
+      btn.disabled = true;
+      btn.textContent = 'ログイン中...';
+      const success = await Store.loginWithGoogle();
+      if (success) {
+        Toast.success('Googleドライブに接続しました');
+        setupScreen.style.display = 'none';
+        this._showApp();
+      } else {
+        Toast.error('Googleログインに失敗しました');
+        btn.disabled = false;
+        btn.textContent = 'Googleアカウントでログイン';
+      }
+    });
+
     // Lucide アイコンを初期化
     if (window.lucide) window.lucide.createIcons();
   }
@@ -155,6 +178,10 @@ class App {
       if (event === 'file_error') {
         this._showFileErrorScreen();
       }
+      // 同期状態の更新（ヘッダーのアイコンを切り替え）
+      if (event === 'sync_start' || event === 'sync_end' || event === 'google_login' || event === 'google_logout') {
+        this._updateStorageIndicator();
+      }
     });
 
     // Lucide アイコン初期化
@@ -163,7 +190,15 @@ class App {
 
   _updateStorageIndicator() {
     const indicator = document.getElementById('storage-indicator');
-    if (Store.isFileMode) {
+    if (Store.isGoogleMode) {
+      const user = Store.googleUser;
+      const syncIcon = Store.isGoogleSyncing ? 'loader' : 'cloud';
+      indicator.className = 'storage-indicator google-mode';
+      indicator.innerHTML = `
+        <i data-lucide="${syncIcon}" style="width:14px;height:14px;"></i>
+        ${user?.email ? user.email : 'Googleドライブ'}
+      `;
+    } else if (Store.isFileMode) {
       indicator.className = 'storage-indicator file-mode';
       indicator.innerHTML = `<i data-lucide="hard-drive" style="width:14px;height:14px;"></i> ファイル保存`;
     } else {

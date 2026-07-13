@@ -14,6 +14,11 @@
   <!-- Lucide Icons -->
   <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
 
+  <!-- Google Identity Services (ログイン用) -->
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
+  <!-- Google API Client Library (ドライブ操作用) -->
+  <script src="https://apis.google.com/js/api.js" async defer></script>
+
   <!-- CSS -->
   <link rel="stylesheet" href="css/variables.css">
   <link rel="stylesheet" href="css/base.css">
@@ -54,6 +59,17 @@
             <button class="btn btn-secondary" id="setup-open-file">既存のデータファイルを開く</button>
           </div>
           <p class="setup-note"><i data-lucide="info" style="width:14px;height:14px;"></i> Chrome / Edge でのみ利用可能です</p>
+        </div>
+
+        <!-- Googleドライブ同期モード -->
+        <div class="setup-option" id="setup-google-mode">
+          <div class="setup-option-icon">
+            <i data-lucide="cloud"></i>
+          </div>
+          <h3>Googleドライブで同期</h3>
+          <p>Googleアカウントでログインし、ドライブ上にデータを自動保存します。PCとスマホで同期できます。</p>
+          <button class="btn btn-primary" id="setup-google-btn">Googleアカウントでログイン</button>
+          <p class="setup-note"><i data-lucide="info" style="width:14px;height:14px;"></i> Googleアカウントが必要です</p>
         </div>
 
         <!-- ブラウザ内保存モード -->

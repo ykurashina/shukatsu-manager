@@ -1,7 +1,13 @@
-// store.js — データストア（LocalStorage / File System Access API ハイブリッド切替）
+// store.js — データストア（LocalStorage / File System Access API / Google Drive ハイブリッド切替）
 
 const STORAGE_KEY = 'shukatsu_manager_data';
 const STORAGE_MODE_KEY = 'shukatsu_storage_mode';
+
+// Google Drive 連携設定
+const GOOGLE_CLIENT_ID = '289971491168-ktd8j68u57tmm0roa9fknhat557onq9q.apps.googleusercontent.com';
+const GOOGLE_DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.file';
+const GOOGLE_DRIVE_FILENAME = 'shukatsu_data.json';
+const GOOGLE_DISCOVERY_DOC = 'https://www.googleapis.com/discovery/v1/apis/drive/v3/rest';
 
 // ステータス定義
 export const STATUS_OPTIONS = ['interested', 'es_drafting', 'es_submitted', 'webtest', 'interviewing', 'offer', 'declined', 'rejected'];
@@ -122,7 +128,16 @@ class DataStore {
     this._fileHandle = null;
     this._listeners = [];
     this._saveTimeout = null;
-    this._storageMode = null; // 'file' | 'local'
+    this._storageMode = null; // 'file' | 'local' | 'google'
+
+    // Google Drive 関連
+    this._googleTokenClient = null;
+    this._googleAccessToken = null;
+    this._googleFileId = null; // ドライブ上のファイルID
+    this._googleUser = null; // { name, email, picture }
+    this._gapiInited = false;
+    this._gisInited = false;
+    this._googleSyncing = false; // 同期中フラグ
   }
 
   // --- 初期化 ---
@@ -134,8 +149,14 @@ class DataStore {
       this._storageMode = null;
     }
 
+    // Google API の初期化（モードに関係なく準備しておく）
+    await this._initGoogleApis();
+
     // データの読み込み
-    if (this._storageMode === 'file' && this._fileHandle) {
+    if (this._storageMode === 'google') {
+      // Googleモード: トークンが残っていなければログイン画面に戻す
+      this._data = createDefaultData();
+    } else if (this._storageMode === 'file' && this._fileHandle) {
       await this._loadFromFile();
     } else if (this._storageMode === 'local') {
       this._loadFromLocalStorage();
@@ -160,6 +181,22 @@ class DataStore {
 
   get isFileConnected() {
     return this._storageMode === 'file' && this._fileHandle !== null;
+  }
+
+  get isGoogleMode() {
+    return this._storageMode === 'google';
+  }
+
+  get isGoogleConnected() {
+    return this._storageMode === 'google' && this._googleAccessToken !== null;
+  }
+
+  get googleUser() {
+    return this._googleUser;
+  }
+
+  get isGoogleSyncing() {
+    return this._googleSyncing;
   }
 
   supportsFileSystemAccess() {
@@ -312,7 +349,9 @@ class DataStore {
   }
 
   async _save() {
-    if (this._storageMode === 'file') {
+    if (this._storageMode === 'google') {
+      await this._saveToGoogleDrive();
+    } else if (this._storageMode === 'file') {
       await this._saveToFile();
     } else {
       this._saveToLocalStorage();
@@ -789,6 +828,264 @@ class DataStore {
       offers: companies.filter(c => c.status === 'offer').length,
       weeklyEvents: this.getUpcomingEvents(7).length
     };
+  }
+  // ========================
+  //   Google Drive 連携
+  // ========================
+
+  /**
+   * Google API（gapi + GIS）の初期化
+   * index.htmlで読み込んだスクリプトが利用可能になるまで待機する
+   */
+  async _initGoogleApis() {
+    // gapi の初期化
+    try {
+      await new Promise((resolve, reject) => {
+        const check = () => {
+          if (typeof gapi !== 'undefined') {
+            gapi.load('client', async () => {
+              try {
+                await gapi.client.init({});
+                await gapi.client.load(GOOGLE_DISCOVERY_DOC);
+                this._gapiInited = true;
+                resolve();
+              } catch (err) {
+                console.warn('gapi client init error:', err);
+                resolve(); // エラーでもアプリ自体は止めない
+              }
+            });
+          } else {
+            setTimeout(check, 100);
+          }
+        };
+        check();
+        // 5秒でタイムアウト
+        setTimeout(() => resolve(), 5000);
+      });
+    } catch (e) {
+      console.warn('gapi load timeout');
+    }
+
+    // GIS トークンクライアントの初期化
+    try {
+      await new Promise((resolve) => {
+        const check = () => {
+          if (typeof google !== 'undefined' && google.accounts && google.accounts.oauth2) {
+            this._googleTokenClient = google.accounts.oauth2.initTokenClient({
+              client_id: GOOGLE_CLIENT_ID,
+              scope: GOOGLE_DRIVE_SCOPE,
+              callback: () => {}, // 後でオーバーライド
+            });
+            this._gisInited = true;
+            resolve();
+          } else {
+            setTimeout(check, 100);
+          }
+        };
+        check();
+        setTimeout(() => resolve(), 5000);
+      });
+    } catch (e) {
+      console.warn('GIS load timeout');
+    }
+  }
+
+  /**
+   * Googleアカウントでログインし、Googleドライブモードに切り替える
+   * @returns {Promise<boolean>} ログイン成功ならtrue
+   */
+  async loginWithGoogle() {
+    if (!this._gapiInited || !this._gisInited) {
+      console.error('Google API が初期化されていません');
+      return false;
+    }
+
+    return new Promise((resolve) => {
+      this._googleTokenClient.callback = async (tokenResponse) => {
+        if (tokenResponse.error) {
+          console.error('Google login error:', tokenResponse);
+          resolve(false);
+          return;
+        }
+
+        this._googleAccessToken = tokenResponse.access_token;
+
+        // ユーザー情報を取得
+        try {
+          const res = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+            headers: { 'Authorization': `Bearer ${this._googleAccessToken}` }
+          });
+          const userInfo = await res.json();
+          this._googleUser = {
+            name: userInfo.name || '',
+            email: userInfo.email || '',
+            picture: userInfo.picture || ''
+          };
+        } catch (e) {
+          this._googleUser = { name: '', email: 'ログイン済み', picture: '' };
+        }
+
+        // ストレージモードをgoogleに設定
+        this._storageMode = 'google';
+        try {
+          localStorage.setItem(STORAGE_MODE_KEY, 'google');
+        } catch (e) { /* ignore */ }
+
+        // ドライブからデータ読み込み
+        await this._loadFromGoogleDrive();
+
+        this._notifyListeners('google_login');
+        resolve(true);
+      };
+
+      // Safari対応: ポップアップではなくリダイレクト方式で認証
+      // ※ただしGISのrequestAccessTokenはポップアップのみなので、
+      //   まずはポップアップで試行する
+      this._googleTokenClient.requestAccessToken({ prompt: 'consent' });
+    });
+  }
+
+  /**
+   * Googleアカウントからログアウト
+   */
+  logoutFromGoogle() {
+    if (this._googleAccessToken) {
+      google.accounts.oauth2.revoke(this._googleAccessToken, () => {
+        console.log('Google token revoked');
+      });
+    }
+    this._googleAccessToken = null;
+    this._googleFileId = null;
+    this._googleUser = null;
+
+    // ローカルモードにフォールバック
+    this._storageMode = 'local';
+    try {
+      localStorage.setItem(STORAGE_MODE_KEY, 'local');
+    } catch (e) { /* ignore */ }
+
+    this._saveToLocalStorage(); // ログアウト前にローカルにもバックアップ
+    this._notifyListeners('google_logout');
+  }
+
+  /**
+   * Googleドライブからデータを読み込む
+   * ファイルが存在しない場合は新規作成する
+   */
+  async _loadFromGoogleDrive() {
+    this._googleSyncing = true;
+    this._notifyListeners('sync_start');
+
+    try {
+      // 1. ドライブ上で既存ファイルを検索
+      const searchRes = await gapi.client.drive.files.list({
+        q: `name='${GOOGLE_DRIVE_FILENAME}' and trashed=false`,
+        fields: 'files(id, name, modifiedTime)',
+        spaces: 'drive'
+      });
+
+      const files = searchRes.result.files;
+
+      if (files && files.length > 0) {
+        // 2a. ファイルが見つかった → ダウンロード
+        this._googleFileId = files[0].id;
+        const downloadRes = await gapi.client.drive.files.get({
+          fileId: this._googleFileId,
+          alt: 'media'
+        });
+
+        if (downloadRes.body && downloadRes.body.trim() !== '') {
+          this._data = JSON.parse(downloadRes.body);
+          this._migrateData();
+        } else {
+          this._data = createDefaultData();
+          this._data.settings.storageMode = 'google';
+        }
+      } else {
+        // 2b. ファイルが無い → 新規作成
+        this._data = createDefaultData();
+        this._data.settings.storageMode = 'google';
+        await this._createGoogleDriveFile();
+      }
+
+      // ローカルにもバックアップ（オフライン時の保険）
+      this._saveToLocalStorage();
+    } catch (err) {
+      console.error('Google Drive 読み込みエラー:', err);
+      // フォールバック: ローカルのデータを使う
+      this._loadFromLocalStorage();
+    } finally {
+      this._googleSyncing = false;
+      this._notifyListeners('sync_end');
+    }
+  }
+
+  /**
+   * Googleドライブにデータを保存（上書き）
+   */
+  async _saveToGoogleDrive() {
+    if (!this._googleAccessToken) return;
+
+    this._googleSyncing = true;
+    this._notifyListeners('sync_start');
+
+    try {
+      const jsonStr = JSON.stringify(this._data, null, 2);
+
+      if (this._googleFileId) {
+        // 既存ファイルを上書き
+        await fetch(`https://www.googleapis.com/upload/drive/v3/files/${this._googleFileId}?uploadType=media`, {
+          method: 'PATCH',
+          headers: {
+            'Authorization': `Bearer ${this._googleAccessToken}`,
+            'Content-Type': 'application/json'
+          },
+          body: jsonStr
+        });
+      } else {
+        // ファイルIDが無い場合は新規作成
+        await this._createGoogleDriveFile();
+      }
+
+      // ローカルにもバックアップ
+      this._saveToLocalStorage();
+    } catch (err) {
+      console.error('Google Drive 書き込みエラー:', err);
+      // フォールバック: ローカルに保存
+      this._saveToLocalStorage();
+    } finally {
+      this._googleSyncing = false;
+      this._notifyListeners('sync_end');
+    }
+  }
+
+  /**
+   * Googleドライブ上に新しいファイルを作成する
+   */
+  async _createGoogleDriveFile() {
+    try {
+      const metadata = {
+        name: GOOGLE_DRIVE_FILENAME,
+        mimeType: 'application/json'
+      };
+
+      const form = new FormData();
+      form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
+      form.append('file', new Blob([JSON.stringify(this._data, null, 2)], { type: 'application/json' }));
+
+      const res = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${this._googleAccessToken}`
+        },
+        body: form
+      });
+
+      const result = await res.json();
+      this._googleFileId = result.id;
+    } catch (err) {
+      console.error('Google Drive ファイル作成エラー:', err);
+    }
   }
 }
 

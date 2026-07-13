@@ -23,6 +23,9 @@ function _renderContent() {
   const settings = Store.getSettings();
   const isFileMode = Store.isFileMode;
   const isFileConnected = Store.isFileConnected;
+  const isGoogleMode = Store.isGoogleMode;
+  const isGoogleConnected = Store.isGoogleConnected;
+  const googleUser = Store.googleUser;
 
   _container.innerHTML = `
     <div class="page-header">
@@ -38,22 +41,36 @@ function _renderContent() {
         <div>
           <div class="settings-label">保存モード</div>
           <div class="settings-description">
-            ${isFileMode ? 'パソコン内のファイルに保存' : 'ブラウザ内（LocalStorage）に保存'}
+            ${isGoogleMode ? 'Googleドライブに同期' : ''}
+            ${isGoogleMode && isGoogleConnected ? ` — ✅ ${googleUser?.email || '接続中'}` : ''}
+            ${isGoogleMode && !isGoogleConnected ? ' — ⚠️ 未接続（再ログインが必要です）' : ''}
+            ${isFileMode ? 'パソコン内のファイルに保存' : ''}
             ${isFileMode && isFileConnected ? ' — ✅ 接続中' : ''}
             ${isFileMode && !isFileConnected ? ' — ⚠️ 未接続' : ''}
+            ${!isFileMode && !isGoogleMode ? 'ブラウザ内（LocalStorage）に保存' : ''}
           </div>
         </div>
         <div class="page-actions">
+          ${isGoogleMode ? `
+            <button class="btn btn-secondary btn-sm" id="google-logout-btn">
+              <i data-lucide="log-out" style="width:14px;height:14px;"></i> Googleからログアウト
+            </button>
+          ` : `
+            <button class="btn btn-primary btn-sm" id="google-login-btn">
+              <i data-lucide="cloud" style="width:14px;height:14px;"></i> Googleドライブで同期
+            </button>
+          `}
           ${isFileMode && !isFileConnected ? `
             <button class="btn btn-primary btn-sm" id="reconnect-btn">ファイルを再接続</button>
           ` : ''}
           ${isFileMode ? `
             <button class="btn btn-secondary btn-sm" id="switch-local-btn">ブラウザ内保存に切替</button>
-          ` : `
+          ` : ''}
+          ${!isFileMode && !isGoogleMode ? `
             ${Store.supportsFileSystemAccess() ? `
-              <button class="btn btn-primary btn-sm" id="switch-file-btn">ファイル保存に切替</button>
+              <button class="btn btn-secondary btn-sm" id="switch-file-btn">ファイル保存に切替</button>
             ` : ''}
-          `}
+          ` : ''}
         </div>
       </div>
     </div>
@@ -142,6 +159,29 @@ function _renderContent() {
   `;
 
   // --- イベントリスナー ---
+
+  // Googleドライブログイン
+  _container.querySelector('#google-login-btn')?.addEventListener('click', async () => {
+    const btn = _container.querySelector('#google-login-btn');
+    if (btn) { btn.disabled = true; btn.textContent = 'ログイン中...'; }
+    const success = await Store.loginWithGoogle();
+    if (success) {
+      Toast.success('Googleドライブに接続しました');
+      _renderContent();
+    } else {
+      Toast.error('Googleログインに失敗しました');
+      if (btn) { btn.disabled = false; btn.innerHTML = '<i data-lucide="cloud" style="width:14px;height:14px;"></i> Googleドライブで同期'; }
+    }
+  });
+
+  // Googleログアウト
+  _container.querySelector('#google-logout-btn')?.addEventListener('click', () => {
+    Modal.confirm('Googleからログアウトしますか？\nデータはブラウザ内保存に切り替わります。', () => {
+      Store.logoutFromGoogle();
+      Toast.info('Googleからログアウトしました');
+      _renderContent();
+    }, 'ログアウト');
+  });
 
   // ファイル再接続
   _container.querySelector('#reconnect-btn')?.addEventListener('click', async () => {
