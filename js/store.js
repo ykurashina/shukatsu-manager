@@ -1,4 +1,4 @@
-// store.js — データストア（LocalStorage / File System Access API / Google Drive ハイブリッド切替）
+// store.js — データストア（LocalStorage / Google Drive ハイブリッド切替）
 
 const STORAGE_KEY = 'shukatsu_manager_data';
 const STORAGE_MODE_KEY = 'shukatsu_storage_mode';
@@ -103,7 +103,7 @@ function createDefaultData() {
     notes: [],
     bookmarks: getDefaultBookmarks(),
     settings: {
-      storageMode: null, // 'file' | 'local' — 初回起動時に選択
+      storageMode: null, // 'local' | 'google' — 初回起動時に選択
       gbizToken: '',
       rssFeedUrl: 'https://api.rss2json.com/v1/api.json?rss_url=https%3A%2F%2Fnews.mynavi.jp%2Frss%2Findex'
     }
@@ -178,8 +178,12 @@ class DataStore {
         // オフライン時: LocalStorageのキャッシュから読み込み（読み取り専用）
         this._loadFromLocalStorage();
       } else {
-        // オンライン時: トークンが残っていなければログイン画面に戻す
-        this._data = createDefaultData();
+        // オンライン時: キャッシュされたトークンで自動ログインを試みる
+        const autoSuccess = await this.autoLoginFromCache();
+        if (!autoSuccess) {
+          // 自動ログイン失敗時は、いったん空データにする（app.js側でログイン画面に誘導される）
+          this._data = createDefaultData();
+        }
       }
     } else if (this._storageMode === 'local') {
       this._loadFromLocalStorage();
@@ -854,6 +858,12 @@ class DataStore {
           this._googleUser = { name: '', email: 'ログイン済み', picture: '' };
         }
 
+        // セッションキャッシュにトークンとユーザー情報を保存
+        try {
+          sessionStorage.setItem('google_access_token', this._googleAccessToken);
+          sessionStorage.setItem('google_user', JSON.stringify(this._googleUser));
+        } catch (e) { /* ignore */ }
+
         // ストレージモードをgoogleに設定
         this._storageMode = 'google';
         try {
@@ -875,6 +885,39 @@ class DataStore {
   }
 
   /**
+   * sessionStorageのキャッシュからログイン状態を復元する（リロード対策）
+   * @returns {Promise<boolean>} 自動ログイン成功ならtrue
+   */
+  async autoLoginFromCache() {
+    try {
+      const cachedToken = sessionStorage.getItem('google_access_token');
+      const cachedUser = sessionStorage.getItem('google_user');
+
+      if (!cachedToken) return false;
+
+      this._googleAccessToken = cachedToken;
+      if (cachedUser) {
+        this._googleUser = JSON.parse(cachedUser);
+      } else {
+        this._googleUser = { name: '', email: 'ログイン済み', picture: '' };
+      }
+
+      // gapiのトークンを設定（gapi client経由の通信用）
+      if (this._gapiInited) {
+        gapi.client.setToken({ access_token: this._googleAccessToken });
+      }
+
+      // ドライブからデータ読み込み
+      await this._loadFromGoogleDrive();
+      this._notifyListeners('google_login');
+      return true;
+    } catch (e) {
+      console.warn('自動ログイン復元エラー:', e);
+      return false;
+    }
+  }
+
+  /**
    * Googleアカウントからログアウト
    */
   logoutFromGoogle() {
@@ -886,6 +929,12 @@ class DataStore {
     this._googleAccessToken = null;
     this._googleFileId = null;
     this._googleUser = null;
+
+    // キャッシュ削除
+    try {
+      sessionStorage.removeItem('google_access_token');
+      sessionStorage.removeItem('google_user');
+    } catch (e) { /* ignore */ }
 
     // ローカルモードにフォールバック
     this._storageMode = 'local';
@@ -906,6 +955,11 @@ class DataStore {
     this._notifyListeners('sync_start');
 
     try {
+      // gapiのトークンを確実にセットする
+      if (this._gapiInited && this._googleAccessToken) {
+        gapi.client.setToken({ access_token: this._googleAccessToken });
+      }
+
       // 1. ドライブ上で既存ファイルを検索
       const searchRes = await gapi.client.drive.files.list({
         q: `name='${GOOGLE_DRIVE_FILENAME}' and trashed=false`,

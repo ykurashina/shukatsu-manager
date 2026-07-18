@@ -149,7 +149,22 @@ function _renderContent() {
   _container.querySelector('#google-login-btn')?.addEventListener('click', async () => {
     const btn = _container.querySelector('#google-login-btn');
     if (btn) { btn.disabled = true; btn.textContent = 'ログイン中...'; }
+
+    let isTimedOut = false;
+    const timeoutId = setTimeout(() => {
+      isTimedOut = true;
+      if (btn) {
+        btn.disabled = false;
+        btn.innerHTML = '<i data-lucide="cloud" style="width:14px;height:14px;"></i> Googleドライブで同期';
+      }
+      Toast.warning('ログインがタイムアウトしました。ポップアップがブロックされていないか確認してください。');
+    }, 15000); // 15秒でタイムアウト
+
     const success = await Store.loginWithGoogle();
+    clearTimeout(timeoutId);
+
+    if (isTimedOut) return;
+
     if (success) {
       Toast.success('Googleドライブに接続しました');
       _renderContent();

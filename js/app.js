@@ -79,7 +79,20 @@ class App {
       const btn = document.getElementById('setup-google-btn');
       btn.disabled = true;
       btn.textContent = 'ログイン中...';
+
+      let isTimedOut = false;
+      const timeoutId = setTimeout(() => {
+        isTimedOut = true;
+        btn.disabled = false;
+        btn.textContent = 'Googleアカウントでログイン';
+        Toast.warning('ログインがタイムアウトしました。ポップアップがブロックされていないか確認してください。');
+      }, 15000); // 15秒でタイムアウト
+
       const success = await Store.loginWithGoogle();
+      clearTimeout(timeoutId);
+
+      if (isTimedOut) return; // 既にタイムアウト済みの場合は何もしない
+
       if (success) {
         Toast.success('Googleドライブに接続しました');
         setupScreen.style.display = 'none';
@@ -162,18 +175,18 @@ class App {
     const indicator = document.getElementById('storage-indicator');
     if (Store.isOffline) {
       indicator.className = 'storage-indicator offline-mode';
-      indicator.innerHTML = `<i data-lucide="wifi-off" style="width:14px;height:14px;"></i> オフライン`;
+      indicator.innerHTML = `<i data-lucide="wifi-off" style="width:14px;height:14px;"></i> <span class="indicator-text">オフライン</span>`;
     } else if (Store.isGoogleMode) {
       const user = Store.googleUser;
       const syncIcon = Store.isGoogleSyncing ? 'loader' : 'cloud';
       indicator.className = 'storage-indicator google-mode';
       indicator.innerHTML = `
         <i data-lucide="${syncIcon}" style="width:14px;height:14px;"></i>
-        ${user?.email ? user.email : 'Googleドライブ'}
+        <span class="indicator-text">${user?.email ? user.email : 'Googleドライブ'}</span>
       `;
     } else {
       indicator.className = 'storage-indicator local-mode';
-      indicator.innerHTML = `<i data-lucide="globe" style="width:14px;height:14px;"></i> ブラウザ内保存`;
+      indicator.innerHTML = `<i data-lucide="globe" style="width:14px;height:14px;"></i> <span class="indicator-text">ブラウザ内保存</span>`;
     }
     if (window.lucide) window.lucide.createIcons();
   }

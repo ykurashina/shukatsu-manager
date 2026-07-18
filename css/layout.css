@@ -437,6 +437,22 @@
     display: flex;
   }
 
+  /* スマホでのヘッダー折り返し対策 */
+  .header-title {
+    font-size: 1rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .storage-indicator .indicator-text {
+    display: none; /* スマホではメールアドレスやテキストを非表示にする */
+  }
+
+  .storage-indicator {
+    padding: var(--sp-1) var(--sp-2); /* パディングを小さくする */
+  }
+
   .main-content {
     padding: var(--sp-4);
   }
