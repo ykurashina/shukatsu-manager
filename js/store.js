@@ -125,10 +125,10 @@ function getDefaultBookmarks() {
 class DataStore {
   constructor() {
     this._data = null;
-    this._fileHandle = null;
     this._listeners = [];
     this._saveTimeout = null;
-    this._storageMode = null; // 'file' | 'local' | 'google'
+    this._storageMode = null; // 'local' | 'google'
+    this._isOffline = false; // オフラインフラグ（読み取り専用）
 
     // Google Drive 関連
     this._googleTokenClient = null;
@@ -142,22 +142,45 @@ class DataStore {
 
   // --- 初期化 ---
   async init() {
+    // オフライン状態の検知
+    this._isOffline = !navigator.onLine;
+
+    // オンライン/オフライン状態の変化を監視
+    window.addEventListener('online', () => {
+      this._isOffline = false;
+      this._notifyListeners('online');
+    });
+    window.addEventListener('offline', () => {
+      this._isOffline = true;
+      this._notifyListeners('offline');
+    });
+
     // 保存モードの復元
     try {
       this._storageMode = localStorage.getItem(STORAGE_MODE_KEY);
+      // 旧バージョンの 'file' モードは 'local' にマイグレーション
+      if (this._storageMode === 'file') {
+        this._storageMode = 'local';
+        localStorage.setItem(STORAGE_MODE_KEY, 'local');
+      }
     } catch (e) {
       this._storageMode = null;
     }
 
     // Google API の初期化（モードに関係なく準備しておく）
-    await this._initGoogleApis();
+    if (!this._isOffline) {
+      await this._initGoogleApis();
+    }
 
     // データの読み込み
     if (this._storageMode === 'google') {
-      // Googleモード: トークンが残っていなければログイン画面に戻す
-      this._data = createDefaultData();
-    } else if (this._storageMode === 'file' && this._fileHandle) {
-      await this._loadFromFile();
+      if (this._isOffline) {
+        // オフライン時: LocalStorageのキャッシュから読み込み（読み取り専用）
+        this._loadFromLocalStorage();
+      } else {
+        // オンライン時: トークンが残っていなければログイン画面に戻す
+        this._data = createDefaultData();
+      }
     } else if (this._storageMode === 'local') {
       this._loadFromLocalStorage();
     } else {
@@ -173,14 +196,6 @@ class DataStore {
 
   get isStorageModeSelected() {
     return this._storageMode !== null;
-  }
-
-  get isFileMode() {
-    return this._storageMode === 'file';
-  }
-
-  get isFileConnected() {
-    return this._storageMode === 'file' && this._fileHandle !== null;
   }
 
   get isGoogleMode() {
@@ -199,16 +214,8 @@ class DataStore {
     return this._googleSyncing;
   }
 
-  supportsFileSystemAccess() {
-    return 'showOpenFilePicker' in window && window.isSecureContext;
-  }
-
-  async selectFileMode() {
-    this._storageMode = 'file';
-    try {
-      localStorage.setItem(STORAGE_MODE_KEY, 'file');
-    } catch (e) { /* ignore */ }
-    await this._connectFile();
+  get isOffline() {
+    return this._isOffline;
   }
 
   selectLocalMode() {
@@ -217,87 +224,6 @@ class DataStore {
       localStorage.setItem(STORAGE_MODE_KEY, 'local');
     } catch (e) { /* ignore */ }
     this._saveToLocalStorage();
-  }
-
-  // --- File System Access API ---
-  async _connectFile() {
-    try {
-      const [handle] = await window.showOpenFilePicker({
-        types: [{
-          description: '就活管理データファイル',
-          accept: { 'application/json': ['.json'] }
-        }],
-        multiple: false
-      });
-      this._fileHandle = handle;
-      await this._loadFromFile();
-      return true;
-    } catch (err) {
-      if (err.name === 'AbortError') {
-        // ユーザーがキャンセルした
-        return false;
-      }
-      console.error('ファイル接続エラー:', err);
-      return false;
-    }
-  }
-
-  async createNewFile() {
-    try {
-      const handle = await window.showSaveFilePicker({
-        suggestedName: 'shukatsu_data.json',
-        types: [{
-          description: '就活管理データファイル',
-          accept: { 'application/json': ['.json'] }
-        }]
-      });
-      this._fileHandle = handle;
-      this._data = createDefaultData();
-      this._data.settings.storageMode = 'file';
-      await this._saveToFile();
-      return true;
-    } catch (err) {
-      if (err.name === 'AbortError') return false;
-      console.error('ファイル作成エラー:', err);
-      return false;
-    }
-  }
-
-  async reconnectFile() {
-    return await this._connectFile();
-  }
-
-  async _loadFromFile() {
-    try {
-      const file = await this._fileHandle.getFile();
-      const text = await file.text();
-      if (text.trim() === '') {
-        this._data = createDefaultData();
-        this._data.settings.storageMode = 'file';
-        await this._saveToFile();
-      } else {
-        this._data = JSON.parse(text);
-        this._migrateData();
-      }
-    } catch (err) {
-      console.error('ファイル読み込みエラー:', err);
-      this._data = createDefaultData();
-      this._data.settings.storageMode = 'file';
-    }
-  }
-
-  async _saveToFile() {
-    if (!this._fileHandle) return;
-    try {
-      const writable = await this._fileHandle.createWritable();
-      await writable.write(JSON.stringify(this._data, null, 2));
-      await writable.close();
-    } catch (err) {
-      console.error('ファイル書き込みエラー:', err);
-      // ファイルが移動/削除された可能性
-      this._fileHandle = null;
-      this._notifyListeners('file_error');
-    }
   }
 
   // --- LocalStorage ---
@@ -344,6 +270,11 @@ class DataStore {
 
   // --- 保存（デバウンス付き） ---
   _scheduleSave() {
+    // オフライン時は保存をブロック（読み取り専用）
+    if (this._isOffline) {
+      console.warn('オフラインのため保存をスキップしました');
+      return;
+    }
     if (this._saveTimeout) clearTimeout(this._saveTimeout);
     this._saveTimeout = setTimeout(() => this._save(), 300);
   }
@@ -351,8 +282,6 @@ class DataStore {
   async _save() {
     if (this._storageMode === 'google') {
       await this._saveToGoogleDrive();
-    } else if (this._storageMode === 'file') {
-      await this._saveToFile();
     } else {
       this._saveToLocalStorage();
     }

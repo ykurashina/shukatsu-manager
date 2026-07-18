@@ -21,11 +21,10 @@ function _renderContent() {
   if (!_container) return;
 
   const settings = Store.getSettings();
-  const isFileMode = Store.isFileMode;
-  const isFileConnected = Store.isFileConnected;
   const isGoogleMode = Store.isGoogleMode;
   const isGoogleConnected = Store.isGoogleConnected;
   const googleUser = Store.googleUser;
+  const isOffline = Store.isOffline;
 
   _container.innerHTML = `
     <div class="page-header">
@@ -35,42 +34,28 @@ function _renderContent() {
     <!-- データ保存 -->
     <div class="settings-section">
       <h2 class="settings-section-title">
-        <i data-lucide="hard-drive"></i> データ保存
+        <i data-lucide="cloud"></i> データ同期
       </h2>
       <div class="settings-row">
         <div>
           <div class="settings-label">保存モード</div>
           <div class="settings-description">
-            ${isGoogleMode ? 'Googleドライブに同期' : ''}
+            ${isGoogleMode ? 'Googleドライブに同期' : 'ブラウザ内（LocalStorage）に保存'}
             ${isGoogleMode && isGoogleConnected ? ` — ✅ ${googleUser?.email || '接続中'}` : ''}
-            ${isGoogleMode && !isGoogleConnected ? ' — ⚠️ 未接続（再ログインが必要です）' : ''}
-            ${isFileMode ? 'パソコン内のファイルに保存' : ''}
-            ${isFileMode && isFileConnected ? ' — ✅ 接続中' : ''}
-            ${isFileMode && !isFileConnected ? ' — ⚠️ 未接続' : ''}
-            ${!isFileMode && !isGoogleMode ? 'ブラウザ内（LocalStorage）に保存' : ''}
+            ${isGoogleMode && !isGoogleConnected && !isOffline ? ' — ⚠️ 未接続（再ログインが必要です）' : ''}
+            ${isOffline ? ' — 📴 オフライン（閲覧のみ）' : ''}
           </div>
         </div>
         <div class="page-actions">
           ${isGoogleMode ? `
-            <button class="btn btn-secondary btn-sm" id="google-logout-btn">
+            <button class="btn btn-secondary btn-sm" id="google-logout-btn" ${isOffline ? 'disabled' : ''}>
               <i data-lucide="log-out" style="width:14px;height:14px;"></i> Googleからログアウト
             </button>
           ` : `
-            <button class="btn btn-primary btn-sm" id="google-login-btn">
+            <button class="btn btn-primary btn-sm" id="google-login-btn" ${isOffline ? 'disabled' : ''}>
               <i data-lucide="cloud" style="width:14px;height:14px;"></i> Googleドライブで同期
             </button>
           `}
-          ${isFileMode && !isFileConnected ? `
-            <button class="btn btn-primary btn-sm" id="reconnect-btn">ファイルを再接続</button>
-          ` : ''}
-          ${isFileMode ? `
-            <button class="btn btn-secondary btn-sm" id="switch-local-btn">ブラウザ内保存に切替</button>
-          ` : ''}
-          ${!isFileMode && !isGoogleMode ? `
-            ${Store.supportsFileSystemAccess() ? `
-              <button class="btn btn-secondary btn-sm" id="switch-file-btn">ファイル保存に切替</button>
-            ` : ''}
-          ` : ''}
         </div>
       </div>
     </div>
@@ -94,7 +79,7 @@ function _renderContent() {
           <div class="settings-label">データをインポート</div>
           <div class="settings-description">JSONファイルからデータを復元します（現在のデータは上書きされます）</div>
         </div>
-        <button class="btn btn-secondary btn-sm" id="import-btn">
+        <button class="btn btn-secondary btn-sm" id="import-btn" ${isOffline ? 'disabled' : ''}>
           <i data-lucide="upload"></i> インポート
         </button>
         <input type="file" id="import-file-input" accept=".json" style="display:none;">
@@ -104,7 +89,7 @@ function _renderContent() {
           <div class="settings-label">全データを削除</div>
           <div class="settings-description">すべてのデータをリセットします。この操作は取り消せません</div>
         </div>
-        <button class="btn btn-danger btn-sm" id="clear-btn">
+        <button class="btn btn-danger btn-sm" id="clear-btn" ${isOffline ? 'disabled' : ''}>
           <i data-lucide="trash-2"></i> 全データ削除
         </button>
       </div>
@@ -124,9 +109,9 @@ function _renderContent() {
           <div style="display:flex; gap:var(--sp-2); margin-top:var(--sp-2); max-width:480px;">
             <input type="text" class="form-input" id="gbiz-token-input"
                    placeholder="トークンを入力（未設定でもアプリは動作します）"
-                   value="${settings.gbizToken || ''}" style="flex:1;">
-            <button class="btn btn-primary btn-sm" id="gbiz-token-save-btn">保存</button>
-            ${settings.gbizToken ? '<button class="btn btn-secondary btn-sm" id="gbiz-token-clear-btn">削除</button>' : ''}
+                   value="${settings.gbizToken || ''}" style="flex:1;" ${isOffline ? 'disabled' : ''}>
+            <button class="btn btn-primary btn-sm" id="gbiz-token-save-btn" ${isOffline ? 'disabled' : ''}>保存</button>
+            ${settings.gbizToken ? `<button class="btn btn-secondary btn-sm" id="gbiz-token-clear-btn" ${isOffline ? 'disabled' : ''}>削除</button>` : ''}
           </div>
         </div>
       </div>
@@ -140,13 +125,13 @@ function _renderContent() {
       <div class="settings-row">
         <div>
           <div class="settings-label">就活管理</div>
-          <div class="settings-description">バージョン 1.1.0 — ブラウザベースの新卒就活管理アプリ</div>
+          <div class="settings-description">バージョン 2.0.0 — Googleドライブ自動同期対応</div>
         </div>
       </div>
       <div class="settings-row">
         <div>
-          <div class="settings-label">推奨ブラウザ</div>
-          <div class="settings-description">Google Chrome / Microsoft Edge（ファイル保存機能に必要）</div>
+          <div class="settings-label">対応ブラウザ</div>
+          <div class="settings-description">Google Chrome / Safari / Microsoft Edge / Firefox</div>
         </div>
       </div>
       <div class="settings-row">
@@ -181,33 +166,6 @@ function _renderContent() {
       Toast.info('Googleからログアウトしました');
       _renderContent();
     }, 'ログアウト');
-  });
-
-  // ファイル再接続
-  _container.querySelector('#reconnect-btn')?.addEventListener('click', async () => {
-    const success = await Store.reconnectFile();
-    if (success) {
-      Toast.success('ファイルに再接続しました');
-      _renderContent();
-    }
-  });
-
-  // ブラウザ内保存に切替
-  _container.querySelector('#switch-local-btn')?.addEventListener('click', () => {
-    Modal.confirm('ブラウザ内保存に切り替えますか？\n（データは保持されます）', () => {
-      Store.selectLocalMode();
-      Toast.info('ブラウザ内保存に切り替えました');
-      _renderContent();
-    }, '切替');
-  });
-
-  // ファイル保存に切替
-  _container.querySelector('#switch-file-btn')?.addEventListener('click', async () => {
-    const success = await Store.selectFileMode();
-    if (success) {
-      Toast.success('ファイル保存に切り替えました');
-      _renderContent();
-    }
   });
 
   // エクスポート

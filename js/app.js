@@ -39,22 +39,22 @@ class App {
     // ストアの初期化
     await Store.init();
 
+    // Googleモードで再訪問時（オフラインならキャッシュで起動、オンラインなら再ログイン）
+    if (Store.isGoogleMode && !Store.isGoogleConnected) {
+      if (Store.isOffline) {
+        // オフライン: キャッシュデータで読み取り専用表示
+        this._showApp();
+        return;
+      }
+      // オンラインだがトークン切れ: ログイン画面を表示
+      this._showSetupScreen();
+      return;
+    }
+
     // 保存モードが未選択 → セットアップ画面を表示
     if (!Store.isStorageModeSelected) {
       this._showSetupScreen();
       return;
-    }
-
-    // Googleモードで再訪問時: トークンが切れているので再ログインが必要
-    if (Store.isGoogleMode && !Store.isGoogleConnected) {
-      this._showSetupScreen();
-      return;
-    }
-
-    // ファイルモードで接続が切れている場合
-    if (Store.isFileMode && !Store.isFileConnected) {
-      // 自動再接続は要求しない（ユーザージェスチャーが必要）
-      // 直接アプリを表示して、ファイル再接続ボタンを提供
     }
 
     this._showApp();
@@ -65,39 +65,6 @@ class App {
     const app = document.getElementById('app');
     setupScreen.style.display = '';
     app.style.display = 'none';
-
-    // File System Access API サポートチェック
-    if (!Store.supportsFileSystemAccess()) {
-      const fileOption = document.getElementById('setup-file-mode');
-      fileOption.style.opacity = '0.5';
-      fileOption.style.pointerEvents = 'none';
-      const note = fileOption.querySelector('.setup-note');
-      if (note) {
-        note.textContent = '⚠️ このブラウザではファイル保存は利用できません。Chrome/Edgeをご利用ください。';
-        note.classList.add('warning');
-      }
-    }
-
-    // 新しいファイルを作成
-    document.getElementById('setup-create-file').addEventListener('click', async () => {
-      const success = await Store.createNewFile();
-      if (success) {
-        Store.selectFileMode && (await Store.selectFileMode());
-        Toast.success('データファイルを作成しました');
-        setupScreen.style.display = 'none';
-        this._showApp();
-      }
-    });
-
-    // 既存ファイルを開く
-    document.getElementById('setup-open-file').addEventListener('click', async () => {
-      const success = await Store.selectFileMode();
-      if (success) {
-        Toast.success('データファイルを読み込みました');
-        setupScreen.style.display = 'none';
-        this._showApp();
-      }
-    });
 
     // ブラウザ内保存
     document.getElementById('setup-local-btn').addEventListener('click', () => {
@@ -131,10 +98,8 @@ class App {
   _showApp() {
     const setupScreen = document.getElementById('setup-screen');
     const app = document.getElementById('app');
-    const fileErrorScreen = document.getElementById('file-error-screen');
 
     setupScreen.style.display = 'none';
-    fileErrorScreen.style.display = 'none';
     app.style.display = '';
 
     // サイドバー初期化
@@ -151,6 +116,9 @@ class App {
 
     // ストレージインジケーター更新
     this._updateStorageIndicator();
+
+    // オフラインバナーの初期表示
+    this._updateOfflineBanner();
 
     // ルーター初期化
     this.router.setContainer(document.getElementById('main-content'));
@@ -173,13 +141,15 @@ class App {
 
     this.router.start();
 
-    // ファイルエラー監視
+    // イベント監視
     Store.onDataChange((event) => {
-      if (event === 'file_error') {
-        this._showFileErrorScreen();
-      }
       // 同期状態の更新（ヘッダーのアイコンを切り替え）
       if (event === 'sync_start' || event === 'sync_end' || event === 'google_login' || event === 'google_logout') {
+        this._updateStorageIndicator();
+      }
+      // オンライン/オフライン切替の監視
+      if (event === 'online' || event === 'offline') {
+        this._updateOfflineBanner();
         this._updateStorageIndicator();
       }
     });
@@ -190,7 +160,10 @@ class App {
 
   _updateStorageIndicator() {
     const indicator = document.getElementById('storage-indicator');
-    if (Store.isGoogleMode) {
+    if (Store.isOffline) {
+      indicator.className = 'storage-indicator offline-mode';
+      indicator.innerHTML = `<i data-lucide="wifi-off" style="width:14px;height:14px;"></i> オフライン`;
+    } else if (Store.isGoogleMode) {
       const user = Store.googleUser;
       const syncIcon = Store.isGoogleSyncing ? 'loader' : 'cloud';
       indicator.className = 'storage-indicator google-mode';
@@ -198,9 +171,6 @@ class App {
         <i data-lucide="${syncIcon}" style="width:14px;height:14px;"></i>
         ${user?.email ? user.email : 'Googleドライブ'}
       `;
-    } else if (Store.isFileMode) {
-      indicator.className = 'storage-indicator file-mode';
-      indicator.innerHTML = `<i data-lucide="hard-drive" style="width:14px;height:14px;"></i> ファイル保存`;
     } else {
       indicator.className = 'storage-indicator local-mode';
       indicator.innerHTML = `<i data-lucide="globe" style="width:14px;height:14px;"></i> ブラウザ内保存`;
@@ -208,39 +178,15 @@ class App {
     if (window.lucide) window.lucide.createIcons();
   }
 
-  _showFileErrorScreen() {
-    document.getElementById('app').style.display = 'none';
-    document.getElementById('file-error-screen').style.display = '';
-
-    document.getElementById('reconnect-file').addEventListener('click', async () => {
-      const success = await Store.reconnectFile();
-      if (success) {
-        Toast.success('ファイルに再接続しました');
-        document.getElementById('file-error-screen').style.display = 'none';
-        this._showApp();
-      }
-    });
-
-    document.getElementById('switch-to-local').addEventListener('click', () => {
-      Store.selectLocalMode();
-      Toast.info('ブラウザ内保存モードに切り替えました');
-      document.getElementById('file-error-screen').style.display = 'none';
-      this._showApp();
-    });
-
-    if (window.lucide) window.lucide.createIcons();
+  _updateOfflineBanner() {
+    const banner = document.getElementById('offline-banner');
+    if (banner) {
+      banner.style.display = Store.isOffline ? 'flex' : 'none';
+      if (window.lucide) window.lucide.createIcons();
+    }
   }
 }
 
 // --- アプリ起動 ---
 const app = new App();
 app.start().catch(console.error);
-
-// ハートビート機能（ブラウザが閉じられたらサーバーを自動終了させるため）
-function startHeartbeat() {
-  setInterval(() => {
-    fetch('/heartbeat').catch(() => {});
-  }, 3000);
-}
-startHeartbeat();
-
