@@ -858,10 +858,10 @@ class DataStore {
           this._googleUser = { name: '', email: 'ログイン済み', picture: '' };
         }
 
-        // セッションキャッシュにトークンとユーザー情報を保存
+        // ローカルキャッシュにトークンとユーザー情報を保存（ブラウザを閉じても維持）
         try {
-          sessionStorage.setItem('google_access_token', this._googleAccessToken);
-          sessionStorage.setItem('google_user', JSON.stringify(this._googleUser));
+          localStorage.setItem('google_access_token', this._googleAccessToken);
+          localStorage.setItem('google_user', JSON.stringify(this._googleUser));
         } catch (e) { /* ignore */ }
 
         // ストレージモードをgoogleに設定
@@ -890,8 +890,8 @@ class DataStore {
    */
   async autoLoginFromCache() {
     try {
-      const cachedToken = sessionStorage.getItem('google_access_token');
-      const cachedUser = sessionStorage.getItem('google_user');
+      const cachedToken = localStorage.getItem('google_access_token');
+      const cachedUser = localStorage.getItem('google_user');
 
       if (!cachedToken) return false;
 
@@ -932,8 +932,8 @@ class DataStore {
 
     // キャッシュ削除
     try {
-      sessionStorage.removeItem('google_access_token');
-      sessionStorage.removeItem('google_user');
+      localStorage.removeItem('google_access_token');
+      localStorage.removeItem('google_user');
     } catch (e) { /* ignore */ }
 
     // ローカルモードにフォールバック

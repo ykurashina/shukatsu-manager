@@ -80,25 +80,20 @@ class App {
       btn.disabled = true;
       btn.textContent = 'ログイン中...';
 
-      let isTimedOut = false;
-      const timeoutId = setTimeout(() => {
-        isTimedOut = true;
+      // 3秒後にボタンを再有効化（ログイン画面を閉じた場合にフリーズしないため）
+      const reenableId = setTimeout(() => {
         btn.disabled = false;
         btn.textContent = 'Googleアカウントでログイン';
-        Toast.warning('ログインがタイムアウトしました。ポップアップがブロックされていないか確認してください。');
-      }, 15000); // 15秒でタイムアウト
+      }, 3000);
 
       const success = await Store.loginWithGoogle();
-      clearTimeout(timeoutId);
-
-      if (isTimedOut) return; // 既にタイムアウト済みの場合は何もしない
+      clearTimeout(reenableId);
 
       if (success) {
         Toast.success('Googleドライブに接続しました');
         setupScreen.style.display = 'none';
         this._showApp();
       } else {
-        Toast.error('Googleログインに失敗しました');
         btn.disabled = false;
         btn.textContent = 'Googleアカウントでログイン';
       }

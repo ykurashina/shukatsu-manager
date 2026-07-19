@@ -150,26 +150,21 @@ function _renderContent() {
     const btn = _container.querySelector('#google-login-btn');
     if (btn) { btn.disabled = true; btn.textContent = 'ログイン中...'; }
 
-    let isTimedOut = false;
-    const timeoutId = setTimeout(() => {
-      isTimedOut = true;
+    // 3秒後にボタンを再有効化（ログイン画面を閉じた場合にフリーズしないため）
+    const reenableId = setTimeout(() => {
       if (btn) {
         btn.disabled = false;
         btn.innerHTML = '<i data-lucide="cloud" style="width:14px;height:14px;"></i> Googleドライブで同期';
       }
-      Toast.warning('ログインがタイムアウトしました。ポップアップがブロックされていないか確認してください。');
-    }, 15000); // 15秒でタイムアウト
+    }, 3000);
 
     const success = await Store.loginWithGoogle();
-    clearTimeout(timeoutId);
-
-    if (isTimedOut) return;
+    clearTimeout(reenableId);
 
     if (success) {
       Toast.success('Googleドライブに接続しました');
       _renderContent();
     } else {
-      Toast.error('Googleログインに失敗しました');
       if (btn) { btn.disabled = false; btn.innerHTML = '<i data-lucide="cloud" style="width:14px;height:14px;"></i> Googleドライブで同期'; }
     }
   });
