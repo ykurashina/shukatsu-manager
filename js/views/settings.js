@@ -104,7 +104,7 @@ function _renderContent() {
         <div style="flex:1;">
           <div class="settings-label">APIトークン</div>
           <div class="settings-description">企業情報（資本金・住所等）の自動取得に使用します。<br>
-            <a href="https://info.gbiz.go.jp/" target="_blank" rel="noopener noreferrer" style="color:var(--primary);">APIトークンの無料申請はこちら（経産省 gBizINFO）</a>
+            <a href="https://info.gbiz.go.jp/api/index.html" target="_blank" rel="noopener noreferrer" style="color:var(--primary);">APIトークンの無料申請はこちら（経産省 gBizINFO）</a>
           </div>
           <div style="display:flex; gap:var(--sp-2); margin-top:var(--sp-2); max-width:480px;">
             <input type="text" class="form-input" id="gbiz-token-input"
