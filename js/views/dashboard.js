@@ -293,6 +293,14 @@ function _attachEventListeners() {
       }
     });
   });
+
+  // ニュース更新ボタンのイベント
+  const refreshBtn = _container.querySelector('#news-refresh-btn');
+  if (refreshBtn) {
+    refreshBtn.addEventListener('click', () => {
+      _loadNewsFeed();
+    });
+  }
 }
 
 /**
@@ -333,18 +341,21 @@ async function _loadNewsFeed() {
     return;
   }
 
-  // 更新ボタンのイベント
-  refreshBtn?.addEventListener('click', () => _loadNewsFeed());
+  // 取得中はUIをローディング状態にする
+  if (refreshBtn) {
+    refreshBtn.disabled = true;
+    refreshBtn.innerHTML = '<i data-lucide="loader" class="spin"></i> 取得中...';
+    if (window.lucide) window.lucide.createIcons();
+  }
+  container.innerHTML = '<p style="color: var(--text-tertiary); font-size: var(--text-sm); text-align: center;">ニュースを読み込み中...</p>';
 
   try {
     const articles = await fetchNewsFromRSS(feedUrl, 5);
 
     if (articles.length === 0) {
       container.innerHTML = '<p style="color: var(--text-tertiary); font-size: var(--text-sm); text-align: center;">ニュースが取得できませんでした</p>';
-      return;
-    }
-
-    container.innerHTML = articles.map(article => `
+    } else {
+      container.innerHTML = articles.map(article => `
       <a href="${article.link}" target="_blank" rel="noopener noreferrer" class="news-item" style="
         display: flex; gap: var(--sp-3); padding: var(--sp-3); border-radius: var(--radius-md);
         text-decoration: none; color: inherit; transition: background var(--transition-fast);
@@ -359,8 +370,16 @@ async function _loadNewsFeed() {
     `).join('');
 
     if (window.lucide) window.lucide.createIcons();
+    }
   } catch (err) {
     container.innerHTML = '<p style="color: var(--text-tertiary); font-size: var(--text-sm); text-align: center;">ニュースの読み込みに失敗しました</p>';
+  } finally {
+    // 取得完了後にボタンを元に戻す
+    if (refreshBtn) {
+      refreshBtn.disabled = false;
+      refreshBtn.innerHTML = '<i data-lucide="refresh-cw"></i> 更新';
+      if (window.lucide) window.lucide.createIcons();
+    }
   }
 }
 

@@ -270,6 +270,11 @@ class DataStore {
         this._data.settings[key] = defaults.settings[key];
       }
     }
+
+    // 古いマイナビニュースのURLが保存されている場合は、新しいGoogleニュースのURLに強制更新
+    if (this._data.settings.rssFeedUrl && this._data.settings.rssFeedUrl.includes('news.mynavi.jp')) {
+      this._data.settings.rssFeedUrl = defaults.settings.rssFeedUrl;
+    }
   }
 
   // --- 保存（デバウンス付き） ---
