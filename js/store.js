@@ -105,7 +105,7 @@ function createDefaultData() {
     settings: {
       storageMode: null, // 'local' | 'google' — 初回起動時に選択
       gbizToken: '',
-      rssFeedUrl: 'https://api.rss2json.com/v1/api.json?rss_url=https%3A%2F%2Fnews.mynavi.jp%2Frss%2Findex'
+      rssFeedUrl: 'https://api.rss2json.com/v1/api.json?rss_url=https%3A%2F%2Fnews.google.com%2Frss%2Fsearch%3Fq%3D%25E5%25B0%25B1%25E6%25B4%25BB%2B%25E6%2596%25B0%25E5%258D%2592%26hl%3Dja%26gl%3DJP%26ceid%3DJP%3Aja'
     }
   };
 }
