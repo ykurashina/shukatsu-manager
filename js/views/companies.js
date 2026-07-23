@@ -188,7 +188,7 @@ function renderTable() {
     const empty = document.createElement('div');
     empty.className = 'empty-state';
     empty.innerHTML = `
-      <i data-lucide="building-2" style="width:48px;height:48px;color:var(--text-tertiary)"></i>
+      <i data-lucide="building-2" class="icon-xl" style="color:var(--text-tertiary)"></i>
       <p class="empty-state-text">${_searchQuery || _filterStatus || _filterIndustry || _filterPriority ? '条件に一致する企業がありません' : '企業がまだ登録されていません'}</p>
       <p class="empty-state-sub">「新規追加」から企業を追加しましょう</p>
     `;
@@ -435,7 +435,7 @@ function openCompanyFormModal(companyId = null) {
     const gbizBtn = document.createElement('button');
     gbizBtn.type = 'button';
     gbizBtn.className = 'btn btn-secondary btn-sm';
-    gbizBtn.innerHTML = '<i data-lucide="search" style="width:14px;height:14px;"></i> gBizINFOで企業情報を検索';
+    gbizBtn.innerHTML = '<i data-lucide="search" class="icon-sm"></i> gBizINFOで企業情報を検索';
     const gbizResult = document.createElement('span');
     gbizResult.style.cssText = 'font-size:var(--text-xs); color:var(--text-tertiary);';
     gbizBtn.addEventListener('click', async () => {
@@ -539,7 +539,7 @@ function openCompanyFormModal(companyId = null) {
   const pwGroup = FormUtils.createFormGroup('マイページパスワード', pwInput);
   const secWarn = document.createElement('p');
   secWarn.className = 'form-warning';
-  secWarn.innerHTML = '<i data-lucide="alert-triangle" style="width:14px;height:14px;display:inline;vertical-align:middle;margin-right:4px"></i>パスワードはブラウザのローカルストレージに平文で保存されます。機密性の高いパスワードの保存は推奨しません。';
+  secWarn.innerHTML = '<i data-lucide="alert-triangle" class="icon-sm icon-inline"></i>パスワードはブラウザのローカルストレージに平文で保存されます。機密性の高いパスワードの保存は推奨しません。';
   pwGroup.appendChild(secWarn);
   form.appendChild(pwGroup);
 
@@ -595,7 +595,7 @@ function openCompanyDetailModal(companyId) {
   infoHeader.innerHTML = `<h3>企業情報</h3>`;
   const editBtn = document.createElement('button');
   editBtn.className = 'btn btn-secondary btn-sm';
-  editBtn.innerHTML = '<i data-lucide="edit-2" style="width:14px;height:14px"></i> 編集';
+  editBtn.innerHTML = '<i data-lucide="edit-2" class="icon-sm"></i> 編集';
   editBtn.addEventListener('click', () => {
     Modal.close();
     setTimeout(() => openCompanyFormModal(companyId), 250);
@@ -648,7 +648,7 @@ function openCompanyDetailModal(companyId) {
       a.target = '_blank';
       a.rel = 'noopener noreferrer';
       a.className = 'detail-link';
-      a.innerHTML = '<i data-lucide="external-link" style="width:14px;height:14px"></i> Webサイト';
+      a.innerHTML = '<i data-lucide="external-link" class="icon-sm"></i> Webサイト';
       linksDiv.appendChild(a);
     }
     if (company.mypageUrl) {
@@ -657,7 +657,7 @@ function openCompanyDetailModal(companyId) {
       a.target = '_blank';
       a.rel = 'noopener noreferrer';
       a.className = 'detail-link';
-      a.innerHTML = '<i data-lucide="external-link" style="width:14px;height:14px"></i> マイページ';
+      a.innerHTML = '<i data-lucide="external-link" class="icon-sm"></i> マイページ';
       linksDiv.appendChild(a);
     }
     infoSection.appendChild(linksDiv);
@@ -670,10 +670,10 @@ function openCompanyDetailModal(companyId) {
     credDiv.innerHTML = `
       <span class="detail-label">マイページID:</span>
       <span class="detail-value">${company.mypageId || '-'}</span>
-      <span class="detail-label" style="margin-left:16px">パスワード:</span>
+      <span class="detail-label label-margin">パスワード:</span>
       <span class="detail-value password-masked" id="detail-pw-display">••••••••</span>
       <button type="button" class="btn-icon btn-icon-sm" id="detail-pw-toggle" title="表示/非表示">
-        <i data-lucide="eye" style="width:14px;height:14px"></i>
+        <i data-lucide="eye" class="icon-sm"></i>
       </button>
     `;
     infoSection.appendChild(credDiv);
@@ -686,7 +686,7 @@ function openCompanyDetailModal(companyId) {
         toggle.addEventListener('click', () => {
           visible = !visible;
           display.textContent = visible ? (company.mypagePassword || '-') : '••••••••';
-          toggle.innerHTML = `<i data-lucide="${visible ? 'eye-off' : 'eye'}" style="width:14px;height:14px"></i>`;
+          toggle.innerHTML = `<i data-lucide="${visible ? 'eye-off' : 'eye'}" class="icon-sm"></i>`;
           if (window.lucide) window.lucide.createIcons();
         });
       }
@@ -712,7 +712,7 @@ function openCompanyDetailModal(companyId) {
   stepsHeader.innerHTML = '<h3>選考ステップ</h3>';
   const addStepBtn = document.createElement('button');
   addStepBtn.className = 'btn btn-primary btn-sm';
-  addStepBtn.innerHTML = '<i data-lucide="plus" style="width:14px;height:14px"></i> ステップ追加';
+  addStepBtn.innerHTML = '<i data-lucide="plus" class="icon-sm"></i> ステップ追加';
   addStepBtn.addEventListener('click', () => {
     Modal.close();
     setTimeout(() => openStepFormModal(companyId), 250);
@@ -758,7 +758,7 @@ function openCompanyDetailModal(companyId) {
       const stepDelBtn = document.createElement('button');
       stepDelBtn.className = 'btn-icon btn-icon-danger btn-icon-sm';
       stepDelBtn.title = '削除';
-      stepDelBtn.innerHTML = '<i data-lucide="trash-2" style="width:14px;height:14px"></i>';
+      stepDelBtn.innerHTML = '<i data-lucide="trash-2" class="icon-sm"></i>';
       stepDelBtn.addEventListener('click', (e) => {
         e.stopPropagation();
         Modal.confirm(
@@ -781,10 +781,10 @@ function openCompanyDetailModal(companyId) {
       const stepMeta = document.createElement('div');
       stepMeta.className = 'step-card-meta';
       if (step.scheduledDate) {
-        stepMeta.innerHTML += `<span><i data-lucide="calendar" style="width:12px;height:12px"></i> ${DateUtils.formatDate(step.scheduledDate)}</span>`;
+        stepMeta.innerHTML += `<span><i data-lucide="calendar" class="icon-xs"></i> ${DateUtils.formatDate(step.scheduledDate)}</span>`;
       }
       if (step.location) {
-        stepMeta.innerHTML += `<span><i data-lucide="map-pin" style="width:12px;height:12px"></i> ${escapeHtml(step.location)}</span>`;
+        stepMeta.innerHTML += `<span><i data-lucide="map-pin" class="icon-xs"></i> ${escapeHtml(step.location)}</span>`;
       }
       if (stepMeta.innerHTML) stepCard.appendChild(stepMeta);
 

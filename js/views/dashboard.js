@@ -172,7 +172,7 @@ function _renderKPIGrid(stats) {
 function _renderUpcomingEventsPanel(events) {
   const eventListHTML = events.length > 0
     ? `<div class="event-list">${events.map(e => _renderEventItem(e)).join('')}</div>`
-    : `<p style="color: var(--text-tertiary); font-size: var(--text-sm); text-align: center; padding: var(--sp-4) 0;">直近7日間の予定はありません</p>`;
+    : `<p class="panel-empty-message">直近7日間の予定はありません</p>`;
 
   return `
     <div class="dashboard-panel">
@@ -199,15 +199,13 @@ function _renderEventItem(event) {
   const dotColor = event.color || EVENT_TYPE_COLORS[event.type] || '#94a3b8';
 
   // カウントダウンの色分け
-  let countdownStyle = '';
+  let countdownClass = 'countdown-later';
   if (daysUntil === 0) {
-    countdownStyle = 'background: #fef2f2; color: #dc2626;'; // 今日 → 赤
+    countdownClass = 'countdown-today';
   } else if (daysUntil === 1) {
-    countdownStyle = 'background: #fff7ed; color: #ea580c;'; // 明日 → オレンジ
+    countdownClass = 'countdown-tomorrow';
   } else if (daysUntil <= 3) {
-    countdownStyle = 'background: #fefce8; color: #ca8a04;'; // 3日以内 → 黄色
-  } else {
-    countdownStyle = 'background: #f0fdf4; color: #16a34a;'; // それ以降 → 緑
+    countdownClass = 'countdown-soon';
   }
 
   return `
@@ -217,7 +215,7 @@ function _renderEventItem(event) {
         <div class="event-title">${_escapeHTML(event.title)}</div>
         <div class="event-date">${dateLabel} ・ ${typeLabel}</div>
       </div>
-      <span class="event-countdown" style="${countdownStyle}">${countdownLabel}</span>
+      <span class="event-countdown ${countdownClass}">${countdownLabel}</span>
     </div>
   `;
 }
@@ -228,7 +226,7 @@ function _renderEventItem(event) {
 function _renderUrgentActionsPanel(actions) {
   const actionListHTML = actions.length > 0
     ? actions.map(a => _renderActionItem(a)).join('')
-    : `<p style="color: var(--text-tertiary); font-size: var(--text-sm); text-align: center; padding: var(--sp-4) 0;">3日以内の緊急アクションはありません 🎉</p>`;
+    : `<p class="panel-empty-message">3日以内の緊急アクションはありません 🎉</p>`;
 
   return `
     <div class="dashboard-panel">
@@ -308,7 +306,7 @@ function _attachEventListeners() {
  */
 function _renderNewsFeedPanel() {
   return `
-    <div class="dashboard-panel" style="grid-column: 1 / -1; margin-top: var(--sp-2);">
+    <div class="dashboard-panel news-feed-panel">
       <div class="panel-header">
         <div class="panel-title">
           <i data-lucide="newspaper"></i>
@@ -318,8 +316,8 @@ function _renderNewsFeedPanel() {
           <i data-lucide="refresh-cw"></i> 更新
         </button>
       </div>
-      <div id="news-feed-content" style="padding: var(--sp-3);">
-        <p style="color: var(--text-tertiary); font-size: var(--text-sm); text-align: center;">ニュースを読み込み中...</p>
+      <div id="news-feed-content" class="news-feed-content">
+        <p class="panel-empty-message">ニュースを読み込み中...</p>
       </div>
     </div>
   `;
@@ -336,7 +334,7 @@ async function _loadNewsFeed() {
 
   if (!feedUrl || !container) {
     if (container) {
-      container.innerHTML = '<p style="color: var(--text-tertiary); font-size: var(--text-sm); text-align: center;">RSSフィードURLが設定されていません</p>';
+      container.innerHTML = '<p class="panel-empty-message">RSSフィードURLが設定されていません</p>';
     }
     return;
   }
@@ -347,32 +345,28 @@ async function _loadNewsFeed() {
     refreshBtn.innerHTML = '<i data-lucide="loader" class="spin"></i> 取得中...';
     if (window.lucide) window.lucide.createIcons();
   }
-  container.innerHTML = '<p style="color: var(--text-tertiary); font-size: var(--text-sm); text-align: center;">ニュースを読み込み中...</p>';
+  container.innerHTML = '<p class="panel-empty-message">ニュースを読み込み中...</p>';
 
   try {
     const articles = await fetchNewsFromRSS(feedUrl, 5);
 
     if (articles.length === 0) {
-      container.innerHTML = '<p style="color: var(--text-tertiary); font-size: var(--text-sm); text-align: center;">ニュースが取得できませんでした</p>';
+      container.innerHTML = '<p class="panel-empty-message">ニュースが取得できませんでした</p>';
     } else {
       container.innerHTML = articles.map(article => `
-      <a href="${article.link}" target="_blank" rel="noopener noreferrer" class="news-item" style="
-        display: flex; gap: var(--sp-3); padding: var(--sp-3); border-radius: var(--radius-md);
-        text-decoration: none; color: inherit; transition: background var(--transition-fast);
-        border-bottom: 1px solid var(--border-light);
-      " onmouseover="this.style.background='var(--surface-hover)'" onmouseout="this.style.background='transparent'">
-        <div style="flex:1; min-width:0;">
-          <div style="font-size: var(--text-sm); font-weight: var(--fw-medium); color: var(--text-primary); margin-bottom: 2px;">${_escapeHTML(article.title)}</div>
-          <div style="font-size: var(--text-xs); color: var(--text-tertiary);">${article.pubDate ? new Date(article.pubDate).toLocaleDateString('ja-JP') : ''}</div>
+      <a href="${article.link}" target="_blank" rel="noopener noreferrer" class="news-item">
+        <div class="news-item-body">
+          <div class="news-item-title">${_escapeHTML(article.title)}</div>
+          <div class="news-item-date">${article.pubDate ? new Date(article.pubDate).toLocaleDateString('ja-JP') : ''}</div>
         </div>
-        <i data-lucide="external-link" style="width:14px;height:14px;color:var(--text-tertiary);flex-shrink:0;margin-top:2px;"></i>
+        <i data-lucide="external-link" class="news-item-icon"></i>
       </a>
     `).join('');
 
     if (window.lucide) window.lucide.createIcons();
     }
   } catch (err) {
-    container.innerHTML = '<p style="color: var(--text-tertiary); font-size: var(--text-sm); text-align: center;">ニュースの読み込みに失敗しました</p>';
+    container.innerHTML = '<p class="panel-empty-message">ニュースの読み込みに失敗しました</p>';
   } finally {
     // 取得完了後にボタンを元に戻す
     if (refreshBtn) {

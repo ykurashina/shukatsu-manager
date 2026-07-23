@@ -125,7 +125,7 @@ function _renderContent() {
       <div class="settings-row">
         <div>
           <div class="settings-label">就活管理</div>
-          <div class="settings-description">バージョン 2.1.0 — ニュース機能・UI改善版</div>
+          <div class="settings-description">バージョン 2.2.0 — リファクタリング・UI改善版</div>
         </div>
       </div>
       <div class="settings-row">

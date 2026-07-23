@@ -772,59 +772,72 @@ class DataStore {
   // ========================
 
   /**
+   * グローバル変数が利用可能になるまでポーリングで待機するヘルパー
+   * @param {function} checkFn - trueを返したら解決する条件関数
+   * @param {number} timeoutMs - タイムアウト（ミリ秒）
+   * @returns {Promise<boolean>} 条件を満たしたらtrue、タイムアウトならfalse
+   */
+  _waitForGlobal(checkFn, timeoutMs = 5000) {
+    return new Promise((resolve) => {
+      const start = Date.now();
+      const poll = () => {
+        if (checkFn()) {
+          resolve(true);
+        } else if (Date.now() - start > timeoutMs) {
+          resolve(false);
+        } else {
+          setTimeout(poll, 100);
+        }
+      };
+      poll();
+    });
+  }
+
+  /**
    * Google API（gapi + GIS）の初期化
    * index.htmlで読み込んだスクリプトが利用可能になるまで待機する
    */
   async _initGoogleApis() {
     // gapi の初期化
     try {
-      await new Promise((resolve, reject) => {
-        const check = () => {
-          if (typeof gapi !== 'undefined') {
-            gapi.load('client', async () => {
-              try {
-                await gapi.client.init({});
-                await gapi.client.load(GOOGLE_DISCOVERY_DOC);
-                this._gapiInited = true;
-                resolve();
-              } catch (err) {
-                console.warn('gapi client init error:', err);
-                resolve(); // エラーでもアプリ自体は止めない
-              }
-            });
-          } else {
-            setTimeout(check, 100);
-          }
-        };
-        check();
-        // 5秒でタイムアウト
-        setTimeout(() => resolve(), 5000);
-      });
+      const gapiAvailable = await this._waitForGlobal(() => typeof gapi !== 'undefined');
+      if (gapiAvailable) {
+        await new Promise((resolve) => {
+          gapi.load('client', async () => {
+            try {
+              await gapi.client.init({});
+              await gapi.client.load(GOOGLE_DISCOVERY_DOC);
+              this._gapiInited = true;
+            } catch (err) {
+              console.warn('gapi client init error:', err);
+            }
+            resolve();
+          });
+        });
+      } else {
+        console.warn('gapi load timeout');
+      }
     } catch (e) {
-      console.warn('gapi load timeout');
+      console.warn('gapi init failed:', e);
     }
 
     // GIS トークンクライアントの初期化
     try {
-      await new Promise((resolve) => {
-        const check = () => {
-          if (typeof google !== 'undefined' && google.accounts && google.accounts.oauth2) {
-            this._googleTokenClient = google.accounts.oauth2.initTokenClient({
-              client_id: GOOGLE_CLIENT_ID,
-              scope: GOOGLE_DRIVE_SCOPE,
-              callback: () => {}, // 後でオーバーライド
-            });
-            this._gisInited = true;
-            resolve();
-          } else {
-            setTimeout(check, 100);
-          }
-        };
-        check();
-        setTimeout(() => resolve(), 5000);
-      });
+      const gisAvailable = await this._waitForGlobal(
+        () => typeof google !== 'undefined' && google.accounts && google.accounts.oauth2
+      );
+      if (gisAvailable) {
+        this._googleTokenClient = google.accounts.oauth2.initTokenClient({
+          client_id: GOOGLE_CLIENT_ID,
+          scope: GOOGLE_DRIVE_SCOPE,
+          callback: () => {}, // 後でオーバーライド
+        });
+        this._gisInited = true;
+      } else {
+        console.warn('GIS load timeout');
+      }
     } catch (e) {
-      console.warn('GIS load timeout');
+      console.warn('GIS init failed:', e);
     }
   }
 
