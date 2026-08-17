@@ -39,11 +39,21 @@ export const PRIORITY_OPTIONS = ['S', 'A', 'B', 'C'];
 export const PRIORITY_COLORS = { S: '#ef4444', A: '#f59e0b', B: '#3b82f6', C: '#94a3b8' };
 export const SOURCE_OPTIONS = ['マイナビ', 'リクナビ', '直接応募', 'スカウト', 'その他'];
 
-export const STEP_TYPE_OPTIONS = ['webtest', 'interview', 'briefing', 'obog', 'other'];
+// 選考ステップ種別（合否あり・企業必須）
+export const STEP_TYPE_OPTIONS = ['webtest', 'interview', 'intern_selection', 'other'];
 export const STEP_TYPE_LABELS = {
   webtest: 'Webテスト・筆記',
   interview: '面接',
-  briefing: '説明会',
+  intern_selection: '選考型インターン',
+  other: 'その他'
+};
+
+// イベント種別（参加型・合否なし・企業任意）
+export const EVENT_CATEGORY_OPTIONS = ['intern_open', 'briefing', 'joint_briefing', 'obog', 'other'];
+export const EVENT_CATEGORY_LABELS = {
+  intern_open: '体験型インターン',
+  briefing: '企業説明会',
+  joint_briefing: '合同説明会',
   obog: 'OB/OG訪問',
   other: 'その他'
 };
@@ -75,14 +85,20 @@ export const BOOKMARK_CATEGORY_LABELS = {
   other: 'その他'
 };
 
-export const EVENT_TYPE_COLORS = {
+// カレンダー統合色定数（選考 + イベント）
+export const CALENDAR_TYPE_COLORS = {
   es_deadline: '#ef4444',
   interview: '#3b82f6',
-  briefing: '#10b981',
   webtest: '#f59e0b',
-  obog: '#8b5cf6',
+  intern_selection: '#8b5cf6',
+  intern_open: '#a78bfa',
+  briefing: '#10b981',
+  joint_briefing: '#34d399',
+  obog: '#06b6d4',
   other: '#94a3b8'
 };
+// 後方互換エイリアス
+export const EVENT_TYPE_COLORS = CALENDAR_TYPE_COLORS;
 
 // ---------- ユーティリティ ----------
 function generateId() {
@@ -98,6 +114,7 @@ function createDefaultData() {
   return {
     companies: [],
     steps: [],
+    events: [],
     esDocuments: [],
     interviews: [],
     notes: [],
@@ -418,6 +435,59 @@ class DataStore {
     this._notifyListeners('step_delete');
   }
 
+  // ========================
+  //   CRUD: Events（説明会・体験インターン等）
+  // ========================
+  getEvents(companyId) {
+    if (companyId) {
+      return (this._data.events || [])
+        .filter(e => e.companyId === companyId)
+        .sort((a, b) => new Date(b.date || b.createdAt) - new Date(a.date || a.createdAt));
+    }
+    return [...(this._data.events || [])];
+  }
+
+  getEvent(id) {
+    return (this._data.events || []).find(e => e.id === id) || null;
+  }
+
+  addEvent(data) {
+    if (!this._data.events) this._data.events = [];
+    const event = {
+      id: generateId(),
+      category: data.category || 'other',
+      title: data.title || '',
+      date: data.date || '',
+      location: data.location || '',
+      companyId: data.companyId || null,
+      companyName: data.companyName || '',
+      url: data.url || '',
+      memo: data.memo || '',
+      createdAt: now()
+    };
+    this._data.events.push(event);
+    this._scheduleSave();
+    this._notifyListeners('event_add');
+    return event;
+  }
+
+  updateEvent(id, data) {
+    if (!this._data.events) return null;
+    const idx = this._data.events.findIndex(e => e.id === id);
+    if (idx === -1) return null;
+    this._data.events[idx] = { ...this._data.events[idx], ...data };
+    this._scheduleSave();
+    this._notifyListeners('event_update');
+    return this._data.events[idx];
+  }
+
+  deleteEvent(id) {
+    if (!this._data.events) return;
+    this._data.events = this._data.events.filter(e => e.id !== id);
+    this._scheduleSave();
+    this._notifyListeners('event_delete');
+  }
+
   // 選考ステップに基づいて企業のステータスと現在のステップを自動更新
   _autoUpdateCompanyStatus(companyId) {
     const steps = this.getSteps(companyId);
@@ -431,8 +501,7 @@ class DataStore {
     const typeToStatus = {
       webtest: 'webtest',
       interview: 'interviewing',
-      briefing: company.status, // 説明会ではステータスを変えない
-      obog: company.status, // OB/OG訪問ではステータスを変えない
+      intern_selection: 'interviewing', // 選考型インターンは面接中扱い
       other: company.status
     };
 
@@ -662,7 +731,7 @@ class DataStore {
   //   Events（カレンダー用 — 選考ステップから自動生成）
   // ========================
   getAllEvents() {
-    const events = [];
+    const allEvents = [];
 
     // 選考ステップからイベント生成
     for (const step of (this._data.steps || [])) {
@@ -670,19 +739,16 @@ class DataStore {
       const company = this.getCompany(step.companyId);
       const companyName = company ? company.name : '不明な企業';
 
-      let eventType = 'other';
-      if (step.type === 'interview') eventType = 'interview';
-      else if (step.type === 'webtest') eventType = 'webtest';
-      else if (step.type === 'briefing') eventType = 'briefing';
-      else if (step.type === 'obog') eventType = 'obog';
+      const eventType = step.type || 'other';
 
-      events.push({
+      allEvents.push({
         id: step.id,
         date: step.scheduledDate,
-        title: `${companyName} - ${step.stepName || STEP_TYPE_LABELS[step.type]}`,
+        title: companyName + ' - ' + (step.stepName || STEP_TYPE_LABELS[step.type] || 'その他'),
         type: eventType,
+        source: 'step',
         companyId: step.companyId,
-        color: EVENT_TYPE_COLORS[eventType]
+        color: CALENDAR_TYPE_COLORS[eventType] || CALENDAR_TYPE_COLORS.other
       });
     }
 
@@ -691,17 +757,37 @@ class DataStore {
       if (!doc.deadline) continue;
       const company = this.getCompany(doc.companyId);
       const companyName = company ? company.name : '不明な企業';
-      events.push({
-        id: `es_${doc.id}`,
+      allEvents.push({
+        id: 'es_' + doc.id,
         date: doc.deadline,
-        title: `${companyName} - ES締切「${doc.questionTitle}」`,
+        title: companyName + ' - ES締切「' + doc.questionTitle + '」',
         type: 'es_deadline',
+        source: 'es',
         companyId: doc.companyId,
-        color: EVENT_TYPE_COLORS['es_deadline']
+        color: CALENDAR_TYPE_COLORS.es_deadline
       });
     }
 
-    return events.sort((a, b) => new Date(a.date) - new Date(b.date));
+    // イベント（説明会・体験インターン等）からカレンダーイベント生成
+    for (const ev of (this._data.events || [])) {
+      if (!ev.date) continue;
+      let titleParts = [];
+      if (ev.companyName) titleParts.push(ev.companyName);
+      if (ev.title) titleParts.push(ev.title);
+      else titleParts.push(EVENT_CATEGORY_LABELS[ev.category] || 'その他');
+
+      allEvents.push({
+        id: ev.id,
+        date: ev.date,
+        title: titleParts.join(' - '),
+        type: ev.category || 'other',
+        source: 'event',
+        companyId: ev.companyId || null,
+        color: CALENDAR_TYPE_COLORS[ev.category] || CALENDAR_TYPE_COLORS.other
+      });
+    }
+
+    return allEvents.sort((a, b) => new Date(a.date) - new Date(b.date));
   }
 
   // 今後N日間のイベント
