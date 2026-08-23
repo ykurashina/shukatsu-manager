@@ -155,6 +155,8 @@ class DataStore {
     this._gapiInited = false;
     this._gisInited = false;
     this._googleSyncing = false; // 同期中フラグ
+    this._isGoogleAuthExpired = false; // 認証切れフラグ
+    this._authExpiredNotified = false; // トースト通知済みフラグ（連打防止）
   }
 
   // --- 初期化 ---
@@ -237,6 +239,10 @@ class DataStore {
 
   get isOffline() {
     return this._isOffline;
+  }
+
+  get isGoogleAuthExpired() {
+    return this._isGoogleAuthExpired;
   }
 
   selectLocalMode() {
@@ -977,6 +983,10 @@ class DataStore {
         // ドライブからデータ読み込み
         await this._loadFromGoogleDrive();
 
+        // 認証切れフラグをリセット（再ログイン成功）
+        this._isGoogleAuthExpired = false;
+        this._authExpiredNotified = false;
+
         this._notifyListeners('google_login');
         resolve(true);
       };
@@ -1082,15 +1092,35 @@ class DataStore {
         });
 
         if (downloadRes.body && downloadRes.body.trim() !== '') {
-          this._data = JSON.parse(downloadRes.body);
-          this._migrateData();
+          var cloudData = JSON.parse(downloadRes.body);
+          // ローカルの既存データと比較
+          var localDataStr = localStorage.getItem(STORAGE_KEY);
+          var localData = localDataStr ? JSON.parse(localDataStr) : null;
+
+          if (localData && localData.updatedAt && cloudData.updatedAt &&
+              new Date(localData.updatedAt) > new Date(cloudData.updatedAt)) {
+            // 認証切れ中にローカルで更新されていた場合: ローカルデータを採用し、ドライブを更新
+            this._data = localData;
+            this._migrateData();
+            await this._saveToGoogleDrive();
+          } else {
+            // クラウドデータの方が新しいか同等: クラウドデータを採用
+            this._data = cloudData;
+            this._migrateData();
+          }
         } else {
           this._data = createDefaultData();
           this._data.settings.storageMode = 'google';
         }
       } else {
-        // 2b. ファイルが無い → 新規作成
-        this._data = createDefaultData();
+        // 2b. ファイルが無い → 新規作成（ローカルに既存データがあればそれを保存）
+        var localDataStr = localStorage.getItem(STORAGE_KEY);
+        var localData = localDataStr ? JSON.parse(localDataStr) : null;
+        if (localData && localData.companies && localData.companies.length > 0) {
+          this._data = localData;
+        } else {
+          this._data = createDefaultData();
+        }
         this._data.settings.storageMode = 'google';
         await this._createGoogleDriveFile();
       }
@@ -1099,6 +1129,7 @@ class DataStore {
       this._saveToLocalStorage();
     } catch (err) {
       console.error('Google Drive 読み込みエラー:', err);
+      this._handleGoogleAuthError(err);
       // フォールバック: ローカルのデータを使う
       this._loadFromLocalStorage();
     } finally {
@@ -1121,14 +1152,17 @@ class DataStore {
 
       if (this._googleFileId) {
         // 既存ファイルを上書き
-        await fetch(`https://www.googleapis.com/upload/drive/v3/files/${this._googleFileId}?uploadType=media`, {
+        var saveRes = await fetch('https://www.googleapis.com/upload/drive/v3/files/' + this._googleFileId + '?uploadType=media', {
           method: 'PATCH',
           headers: {
-            'Authorization': `Bearer ${this._googleAccessToken}`,
+            'Authorization': 'Bearer ' + this._googleAccessToken,
             'Content-Type': 'application/json'
           },
           body: jsonStr
         });
+        if (saveRes.status === 401) {
+          throw { status: 401, message: 'Google token expired (save)' };
+        }
       } else {
         // ファイルIDが無い場合は新規作成
         await this._createGoogleDriveFile();
@@ -1138,6 +1172,7 @@ class DataStore {
       this._saveToLocalStorage();
     } catch (err) {
       console.error('Google Drive 書き込みエラー:', err);
+      this._handleGoogleAuthError(err);
       // フォールバック: ローカルに保存
       this._saveToLocalStorage();
     } finally {
@@ -1163,15 +1198,43 @@ class DataStore {
       const res = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id', {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${this._googleAccessToken}`
+          'Authorization': 'Bearer ' + this._googleAccessToken
         },
         body: form
       });
+
+      if (res.status === 401) {
+        throw { status: 401, message: 'Google token expired (create)' };
+      }
 
       const result = await res.json();
       this._googleFileId = result.id;
     } catch (err) {
       console.error('Google Drive ファイル作成エラー:', err);
+      this._handleGoogleAuthError(err);
+    }
+  }
+
+  _handleGoogleAuthError(err) {
+    var is401 = false;
+    if (err) {
+      if (err.status === 401 || err.code === 401) {
+        is401 = true;
+      } else if (err.result && err.result.error) {
+        if (err.result.error.code === 401 || err.result.error.status === 'UNAUTHENTICATED') {
+          is401 = true;
+        }
+      } else if (typeof err.message === 'string') {
+        var msg = err.message.toLowerCase();
+        if (msg.indexOf('401') !== -1 || msg.indexOf('login required') !== -1 || msg.indexOf('unauthenticated') !== -1 || msg.indexOf('invalid_token') !== -1) {
+          is401 = true;
+        }
+      }
+    }
+
+    if (is401 && !this._isGoogleAuthExpired) {
+      this._isGoogleAuthExpired = true;
+      this._notifyListeners('auth_expired');
     }
   }
 }

@@ -150,15 +150,28 @@ class App {
     this.router.start();
 
     // イベント監視
+    this._authExpiredNotified = false;
     Store.onDataChange((event) => {
       // 同期状態の更新（ヘッダーのアイコンを切り替え）
       if (event === 'sync_start' || event === 'sync_end' || event === 'google_login' || event === 'google_logout') {
         this._updateStorageIndicator();
+        // 再ログイン成功時にフラグをリセット
+        if (event === 'google_login') {
+          this._authExpiredNotified = false;
+        }
       }
       // オンライン/オフライン切替の監視
       if (event === 'online' || event === 'offline') {
         this._updateOfflineBanner();
         this._updateStorageIndicator();
+      }
+      // Google認証切れの検知
+      if (event === 'auth_expired') {
+        this._updateStorageIndicator();
+        if (!this._authExpiredNotified) {
+          this._authExpiredNotified = true;
+          Toast.show('Googleログインの有効期限が切れました。右上のアイコンをクリックして再ログインしてください', 'error');
+        }
       }
     });
 
@@ -168,20 +181,35 @@ class App {
 
   _updateStorageIndicator() {
     const indicator = document.getElementById('storage-indicator');
+    // 既存のクリックイベントをリセット
+    indicator.onclick = null;
+    indicator.style.cursor = '';
+
     if (Store.isOffline) {
       indicator.className = 'storage-indicator offline-mode';
-      indicator.innerHTML = `<i data-lucide="wifi-off" style="width:14px;height:14px;"></i> <span class="indicator-text">オフライン</span>`;
+      indicator.innerHTML = '<i data-lucide="wifi-off" style="width:14px;height:14px;"></i> <span class="indicator-text">オフライン</span>';
+    } else if (Store.isGoogleAuthExpired) {
+      // 認証切れ状態: 警告表示 + ワンクリック再ログイン
+      indicator.className = 'storage-indicator auth-expired';
+      indicator.innerHTML = '<i data-lucide="alert-triangle" style="width:14px;height:14px;"></i> <span class="indicator-text">ログイン期限切れ (再接続)</span>';
+      indicator.style.cursor = 'pointer';
+      indicator.onclick = async function() {
+        indicator.innerHTML = '<i data-lucide="loader" style="width:14px;height:14px;"></i> <span class="indicator-text">再接続中...</span>';
+        if (window.lucide) window.lucide.createIcons();
+        var success = await Store.loginWithGoogle();
+        if (success) {
+          Toast.show('Googleドライブに再接続しました', 'success');
+        }
+      };
     } else if (Store.isGoogleMode) {
-      const user = Store.googleUser;
-      const syncIcon = Store.isGoogleSyncing ? 'loader' : 'cloud';
+      var user = Store.googleUser;
+      var syncIcon = Store.isGoogleSyncing ? 'loader' : 'cloud';
       indicator.className = 'storage-indicator google-mode';
-      indicator.innerHTML = `
-        <i data-lucide="${syncIcon}" style="width:14px;height:14px;"></i>
-        <span class="indicator-text">${user?.email ? user.email : 'Googleドライブ'}</span>
-      `;
+      indicator.innerHTML = '<i data-lucide="' + syncIcon + '" style="width:14px;height:14px;"></i>' +
+        ' <span class="indicator-text">' + (user && user.email ? user.email : 'Googleドライブ') + '</span>';
     } else {
       indicator.className = 'storage-indicator local-mode';
-      indicator.innerHTML = `<i data-lucide="globe" style="width:14px;height:14px;"></i> <span class="indicator-text">ブラウザ内保存</span>`;
+      indicator.innerHTML = '<i data-lucide="globe" style="width:14px;height:14px;"></i> <span class="indicator-text">ブラウザ内保存</span>';
     }
     if (window.lucide) window.lucide.createIcons();
   }

@@ -76,6 +76,15 @@
   color: var(--text-tertiary);
   background: var(--bg-alt);
 }
+.storage-indicator.auth-expired {
+  color: var(--danger);
+  background: var(--danger-light);
+  font-weight: 600;
+  transition: background var(--transition-fast);
+}
+.storage-indicator.auth-expired:hover {
+  background: rgba(239, 68, 68, 0.25);
+}
 
 /* ---- Offline Banner ---- */
 .offline-banner {
