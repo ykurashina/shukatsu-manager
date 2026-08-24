@@ -406,11 +406,17 @@ class DataStore {
   }
 
   deleteCompany(id) {
-    this._data.companies = this._data.companies.filter(c => c.id !== id);
+    this._data.companies = this._data.companies.filter(function(c) { return c.id !== id; });
     // 関連データも削除
-    this._data.steps = this._data.steps.filter(s => s.companyId !== id);
-    this._data.esDocuments = this._data.esDocuments.filter(e => e.companyId !== id);
-    this._data.interviews = this._data.interviews.filter(i => i.companyId !== id);
+    if (this._data.tracks) {
+      this._data.tracks = this._data.tracks.filter(function(t) { return t.companyId !== id; });
+    }
+    this._data.steps = this._data.steps.filter(function(s) { return s.companyId !== id; });
+    if (this._data.events) {
+      this._data.events = this._data.events.filter(function(e) { return e.companyId !== id; });
+    }
+    this._data.esDocuments = this._data.esDocuments.filter(function(e) { return e.companyId !== id; });
+    this._data.interviews = this._data.interviews.filter(function(i) { return i.companyId !== id; });
     this._scheduleSave();
     this._notifyListeners('company_delete');
   }
@@ -477,20 +483,26 @@ class DataStore {
   // ========================
   //   CRUD: Steps（選考ステップ）
   // ========================
-  getSteps(companyId) {
-    return this._data.steps
-      .filter(s => s.companyId === companyId)
-      .sort((a, b) => new Date(b.scheduledDate || b.createdAt) - new Date(a.scheduledDate || a.createdAt));
+  getSteps(companyId, trackId) {
+    var result = this._data.steps
+      .filter(function(s) { return s.companyId === companyId; });
+    if (trackId) {
+      result = result.filter(function(s) { return s.trackId === trackId; });
+    }
+    return result.sort(function(a, b) {
+      return new Date(b.scheduledDate || b.createdAt) - new Date(a.scheduledDate || a.createdAt);
+    });
   }
 
   getStep(id) {
-    return this._data.steps.find(s => s.id === id) || null;
+    return this._data.steps.find(function(s) { return s.id === id; }) || null;
   }
 
   addStep(data) {
-    const step = {
+    var step = {
       id: generateId(),
       companyId: data.companyId,
+      trackId: data.trackId || null,
       type: data.type || 'other',
       stepName: data.stepName || '',
       scheduledDate: data.scheduledDate || '',
@@ -500,29 +512,30 @@ class DataStore {
       createdAt: now()
     };
     this._data.steps.push(step);
-    // 企業のステータスと現在のステップを自動更新
-    this._autoUpdateCompanyStatus(step.companyId);
     this._scheduleSave();
     this._notifyListeners('step_add');
     return step;
   }
 
   updateStep(id, data) {
-    const idx = this._data.steps.findIndex(s => s.id === id);
+    var idx = this._data.steps.findIndex(function(s) { return s.id === id; });
     if (idx === -1) return null;
-    this._data.steps[idx] = { ...this._data.steps[idx], ...data };
-    this._autoUpdateCompanyStatus(this._data.steps[idx].companyId);
+    var step = this._data.steps[idx];
+    for (var key in data) {
+      if (data.hasOwnProperty(key)) {
+        step[key] = data[key];
+      }
+    }
+    this._data.steps[idx] = step;
     this._scheduleSave();
     this._notifyListeners('step_update');
     return this._data.steps[idx];
   }
 
   deleteStep(id) {
-    const step = this._data.steps.find(s => s.id === id);
+    var step = this._data.steps.find(function(s) { return s.id === id; });
     if (!step) return;
-    const companyId = step.companyId;
-    this._data.steps = this._data.steps.filter(s => s.id !== id);
-    this._autoUpdateCompanyStatus(companyId);
+    this._data.steps = this._data.steps.filter(function(s) { return s.id !== id; });
     this._scheduleSave();
     this._notifyListeners('step_delete');
   }
@@ -530,23 +543,28 @@ class DataStore {
   // ========================
   //   CRUD: Events（説明会・体験インターン等）
   // ========================
-  getEvents(companyId) {
+  getEvents(companyId, scope) {
+    var events = this._data.events || [];
     if (companyId) {
-      return (this._data.events || [])
-        .filter(e => e.companyId === companyId)
-        .sort((a, b) => new Date(b.date || b.createdAt) - new Date(a.date || a.createdAt));
+      events = events.filter(function(e) { return e.companyId === companyId; });
     }
-    return [...(this._data.events || [])];
+    if (scope) {
+      events = events.filter(function(e) { return e.scope === scope; });
+    }
+    return events.sort(function(a, b) {
+      return new Date(b.date || b.createdAt) - new Date(a.date || a.createdAt);
+    });
   }
 
   getEvent(id) {
-    return (this._data.events || []).find(e => e.id === id) || null;
+    return (this._data.events || []).find(function(e) { return e.id === id; }) || null;
   }
 
   addEvent(data) {
     if (!this._data.events) this._data.events = [];
-    const event = {
+    var event = {
       id: generateId(),
+      scope: data.scope || (data.companyId ? 'company' : 'global'),
       category: data.category || 'other',
       title: data.title || '',
       date: data.date || '',
@@ -565,9 +583,15 @@ class DataStore {
 
   updateEvent(id, data) {
     if (!this._data.events) return null;
-    const idx = this._data.events.findIndex(e => e.id === id);
+    var idx = this._data.events.findIndex(function(e) { return e.id === id; });
     if (idx === -1) return null;
-    this._data.events[idx] = { ...this._data.events[idx], ...data };
+    var evt = this._data.events[idx];
+    for (var key in data) {
+      if (data.hasOwnProperty(key)) {
+        evt[key] = data[key];
+      }
+    }
+    this._data.events[idx] = evt;
     this._scheduleSave();
     this._notifyListeners('event_update');
     return this._data.events[idx];
@@ -575,51 +599,9 @@ class DataStore {
 
   deleteEvent(id) {
     if (!this._data.events) return;
-    this._data.events = this._data.events.filter(e => e.id !== id);
+    this._data.events = this._data.events.filter(function(e) { return e.id !== id; });
     this._scheduleSave();
     this._notifyListeners('event_delete');
-  }
-
-  // 選考ステップに基づいて企業のステータスと現在のステップを自動更新
-  _autoUpdateCompanyStatus(companyId) {
-    const steps = this.getSteps(companyId);
-    if (steps.length === 0) return;
-    const latest = steps[0]; // 最新のステップ（日付降順）
-
-    const company = this.getCompany(companyId);
-    if (!company) return;
-
-    // ステップタイプから選考ステータスへのマッピング
-    const typeToStatus = {
-      webtest: 'webtest',
-      interview: 'interviewing',
-      intern_selection: 'interviewing', // 選考型インターンは面接中扱い
-      other: company.status
-    };
-
-    const newStatus = typeToStatus[latest.type] || company.status;
-    const updates = {
-      currentStep: latest.stepName || STEP_TYPE_LABELS[latest.type] || '',
-    };
-
-    // 結果に応じたステータス更新
-    if (latest.result === 'passed' && latest.type === 'interview') {
-      // 面接通過 → ステータスは面接中のまま
-      updates.status = 'interviewing';
-    } else if (latest.result === 'failed') {
-      updates.status = 'rejected';
-    } else {
-      updates.status = newStatus;
-    }
-
-    // 次の予定日を更新（未来の日付を持つステップの中で最も近いもの）
-    const futureSteps = steps.filter(s => s.scheduledDate && new Date(s.scheduledDate) >= new Date());
-    if (futureSteps.length > 0) {
-      futureSteps.sort((a, b) => new Date(a.scheduledDate) - new Date(b.scheduledDate));
-      updates.nextDate = futureSteps[0].scheduledDate;
-    }
-
-    this.updateCompany(companyId, updates);
   }
 
   // ========================
@@ -823,36 +805,51 @@ class DataStore {
   //   Events（カレンダー用 — 選考ステップから自動生成）
   // ========================
   getAllEvents() {
-    const allEvents = [];
+    var allEvents = [];
 
     // 選考ステップからイベント生成
-    for (const step of (this._data.steps || [])) {
+    var steps = this._data.steps || [];
+    for (var i = 0; i < steps.length; i++) {
+      var step = steps[i];
       if (!step.scheduledDate) continue;
-      const company = this.getCompany(step.companyId);
-      const companyName = company ? company.name : '不明な企業';
+      var company = this.getCompany(step.companyId);
+      var companyName = company ? company.name : '不明な企業';
 
-      const eventType = step.type || 'other';
+      // トラックのコース名を取得（あれば付与）
+      var trackLabel = '';
+      if (step.trackId) {
+        var track = this.getTrack(step.trackId);
+        if (track && track.position) {
+          trackLabel = ' (' + track.position + ')';
+        }
+      }
+
+      var stepLabel = step.stepName || STEP_TYPE_LABELS[step.type] || 'その他';
+      var eventType = step.type || 'other';
 
       allEvents.push({
         id: step.id,
         date: step.scheduledDate,
-        title: companyName + ' - ' + (step.stepName || STEP_TYPE_LABELS[step.type] || 'その他'),
+        title: companyName + trackLabel + ': ' + stepLabel,
         type: eventType,
         source: 'step',
         companyId: step.companyId,
+        trackId: step.trackId || null,
         color: CALENDAR_TYPE_COLORS[eventType] || CALENDAR_TYPE_COLORS.other
       });
     }
 
     // ES締切からイベント生成
-    for (const doc of (this._data.esDocuments || [])) {
+    var docs = this._data.esDocuments || [];
+    for (var j = 0; j < docs.length; j++) {
+      var doc = docs[j];
       if (!doc.deadline) continue;
-      const company = this.getCompany(doc.companyId);
-      const companyName = company ? company.name : '不明な企業';
+      var esCompany = this.getCompany(doc.companyId);
+      var esCompanyName = esCompany ? esCompany.name : '不明な企業';
       allEvents.push({
         id: 'es_' + doc.id,
         date: doc.deadline,
-        title: companyName + ' - ES締切「' + doc.questionTitle + '」',
+        title: esCompanyName + ': ES締切「' + doc.questionTitle + '」',
         type: 'es_deadline',
         source: 'es',
         companyId: doc.companyId,
@@ -860,10 +857,12 @@ class DataStore {
       });
     }
 
-    // イベント（説明会・体験インターン等）からカレンダーイベント生成
-    for (const ev of (this._data.events || [])) {
+    // イベント（説明会・体験インターン・合説等）からカレンダーイベント生成
+    var events = this._data.events || [];
+    for (var k = 0; k < events.length; k++) {
+      var ev = events[k];
       if (!ev.date) continue;
-      let titleParts = [];
+      var titleParts = [];
       if (ev.companyName) titleParts.push(ev.companyName);
       if (ev.title) titleParts.push(ev.title);
       else titleParts.push(EVENT_CATEGORY_LABELS[ev.category] || 'その他');
@@ -871,26 +870,28 @@ class DataStore {
       allEvents.push({
         id: ev.id,
         date: ev.date,
-        title: titleParts.join(' - '),
+        title: titleParts.join(': '),
         type: ev.category || 'other',
         source: 'event',
+        scope: ev.scope || 'company',
         companyId: ev.companyId || null,
         color: CALENDAR_TYPE_COLORS[ev.category] || CALENDAR_TYPE_COLORS.other
       });
     }
 
-    return allEvents.sort((a, b) => new Date(a.date) - new Date(b.date));
+    return allEvents.sort(function(a, b) { return new Date(a.date) - new Date(b.date); });
   }
 
   // 今後N日間のイベント
-  getUpcomingEvents(days = 7) {
-    const today = new Date();
+  getUpcomingEvents(days) {
+    if (!days) days = 7;
+    var today = new Date();
     today.setHours(0, 0, 0, 0);
-    const end = new Date(today);
+    var end = new Date(today);
     end.setDate(end.getDate() + days);
 
-    return this.getAllEvents().filter(e => {
-      const d = new Date(e.date);
+    return this.getAllEvents().filter(function(e) {
+      var d = new Date(e.date);
       return d >= today && d <= end;
     });
   }
