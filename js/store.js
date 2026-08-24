@@ -39,24 +39,64 @@ export const PRIORITY_OPTIONS = ['S', 'A', 'B', 'C'];
 export const PRIORITY_COLORS = { S: '#ef4444', A: '#f59e0b', B: '#3b82f6', C: '#94a3b8' };
 export const SOURCE_OPTIONS = ['マイナビ', 'リクナビ', '直接応募', 'スカウト', 'その他'];
 
-// 選考ステップ種別（合否あり・企業必須）
-export const STEP_TYPE_OPTIONS = ['webtest', 'interview', 'intern_selection', 'other'];
-export const STEP_TYPE_LABELS = {
-  webtest: 'Webテスト・筆記',
-  interview: '面接',
-  intern_selection: '選考型インターン',
+// 選考トラック種別（1企業内の選考ルート分類）
+export const TRACK_TYPE_OPTIONS = ['summer_intern', 'autumn_winter_intern', 'early_selection', 'main_selection', 'other'];
+export const TRACK_TYPE_LABELS = {
+  summer_intern: 'サマーインターン',
+  autumn_winter_intern: '秋・冬インターン',
+  early_selection: '早期本選考',
+  main_selection: '本選考',
   other: 'その他'
 };
 
-// イベント種別（参加型・合否なし・企業任意）
-export const EVENT_CATEGORY_OPTIONS = ['intern_open', 'briefing', 'joint_briefing', 'obog', 'other'];
-export const EVENT_CATEGORY_LABELS = {
-  intern_open: '体験型インターン',
-  briefing: '企業説明会',
-  joint_briefing: '合同説明会',
-  obog: 'OB/OG訪問',
+// 選考ステップ種別（各トラック内の個別アクション）
+export const STEP_TYPE_OPTIONS = ['es', 'webtest', 'gd', 'interview', 'intern_day', 'offer', 'other'];
+export const STEP_TYPE_LABELS = {
+  es: 'ES提出',
+  webtest: 'Webテスト・筆記',
+  gd: 'グループディスカッション',
+  interview: '面接',
+  intern_day: 'インターン参加',
+  offer: '内定',
   other: 'その他'
 };
+
+// イベント種別（参加型・合否なし）
+export const EVENT_CATEGORY_OPTIONS = ['briefing', 'intern_open', 'obog', 'joint_briefing', 'seminar', 'other'];
+export const EVENT_CATEGORY_LABELS = {
+  briefing: '個別会社説明会',
+  intern_open: '1Day仕事体験（体験型）',
+  obog: 'OB/OG訪問',
+  joint_briefing: '合同説明会',
+  seminar: '就活セミナー',
+  other: 'その他'
+};
+
+// 企業詳細画面で選択可能なイベント（合説・セミナーはカレンダー専用のため除外）
+export const COMPANY_EVENT_OPTIONS = ['briefing', 'intern_open', 'obog', 'other'];
+
+// カレンダー統合色定数（3系統: 青紫=選考, 緑ティール=企業イベント, オレンジ=全体イベント）
+export const CALENDAR_TYPE_COLORS = {
+  // 選考ステップ（青・紫系）
+  es: '#3b82f6',
+  webtest: '#6366f1',
+  gd: '#8b5cf6',
+  interview: '#2563eb',
+  intern_day: '#7c3aed',
+  offer: '#10b981',
+  // 企業個別イベント（緑・ティール系）
+  briefing: '#059669',
+  intern_open: '#0d9488',
+  obog: '#06b6d4',
+  // 全体イベント（オレンジ系）
+  joint_briefing: '#f59e0b',
+  seminar: '#ea580c',
+  // その他
+  other: '#94a3b8',
+  es_deadline: '#ef4444'
+};
+// 後方互換エイリアス
+export const EVENT_TYPE_COLORS = CALENDAR_TYPE_COLORS;
 
 export const ES_STATUS_OPTIONS = ['not_started', 'drafting', 'completed', 'submitted'];
 export const ES_STATUS_LABELS = {
@@ -85,20 +125,6 @@ export const BOOKMARK_CATEGORY_LABELS = {
   other: 'その他'
 };
 
-// カレンダー統合色定数（選考 + イベント）
-export const CALENDAR_TYPE_COLORS = {
-  es_deadline: '#ef4444',
-  interview: '#3b82f6',
-  webtest: '#f59e0b',
-  intern_selection: '#8b5cf6',
-  intern_open: '#a78bfa',
-  briefing: '#10b981',
-  joint_briefing: '#34d399',
-  obog: '#06b6d4',
-  other: '#94a3b8'
-};
-// 後方互換エイリアス
-export const EVENT_TYPE_COLORS = CALENDAR_TYPE_COLORS;
 
 // ---------- ユーティリティ ----------
 function generateId() {
@@ -113,6 +139,7 @@ function now() {
 function createDefaultData() {
   return {
     companies: [],
+    tracks: [],
     steps: [],
     events: [],
     esDocuments: [],
@@ -386,6 +413,65 @@ class DataStore {
     this._data.interviews = this._data.interviews.filter(i => i.companyId !== id);
     this._scheduleSave();
     this._notifyListeners('company_delete');
+  }
+
+  // ========================
+  //   CRUD: Tracks（選考トラック）
+  // ========================
+  getTracks(companyId) {
+    if (!this._data.tracks) this._data.tracks = [];
+    return this._data.tracks
+      .filter(function(t) { return t.companyId === companyId; })
+      .sort(function(a, b) { return new Date(b.createdAt) - new Date(a.createdAt); });
+  }
+
+  getTrack(id) {
+    if (!this._data.tracks) return null;
+    return this._data.tracks.find(function(t) { return t.id === id; }) || null;
+  }
+
+  addTrack(data) {
+    if (!this._data.tracks) this._data.tracks = [];
+    var track = {
+      id: generateId(),
+      companyId: data.companyId,
+      type: data.type || 'main_selection',
+      position: data.position || '',  // 正式職種・コース名（任意）
+      memo: data.memo || '',          // 募集要項・スキルメモ
+      status: 'interested',           // 初期ステータス
+      createdAt: now(),
+      updatedAt: now()
+    };
+    this._data.tracks.push(track);
+    this._scheduleSave();
+    this._notifyListeners('track_add');
+    return track;
+  }
+
+  updateTrack(id, data) {
+    if (!this._data.tracks) return null;
+    var idx = this._data.tracks.findIndex(function(t) { return t.id === id; });
+    if (idx === -1) return null;
+    var track = this._data.tracks[idx];
+    for (var key in data) {
+      if (data.hasOwnProperty(key)) {
+        track[key] = data[key];
+      }
+    }
+    track.updatedAt = now();
+    this._data.tracks[idx] = track;
+    this._scheduleSave();
+    this._notifyListeners('track_update');
+    return track;
+  }
+
+  deleteTrack(id) {
+    if (!this._data.tracks) return;
+    this._data.tracks = this._data.tracks.filter(function(t) { return t.id !== id; });
+    // 紐づくステップも連動削除
+    this._data.steps = this._data.steps.filter(function(s) { return s.trackId !== id; });
+    this._scheduleSave();
+    this._notifyListeners('track_delete');
   }
 
   // ========================
