@@ -1,6 +1,6 @@
 // companies.js — 企業管理テーブルビュー
 
-import { Store, STATUS_OPTIONS, STATUS_LABELS, STATUS_COLORS, INDUSTRY_OPTIONS, PRIORITY_OPTIONS, PRIORITY_COLORS, SOURCE_OPTIONS, STEP_TYPE_OPTIONS, STEP_TYPE_LABELS, EVENT_CATEGORY_OPTIONS, EVENT_CATEGORY_LABELS, CALENDAR_TYPE_COLORS } from '../store.js';
+import { Store, STATUS_OPTIONS, STATUS_LABELS, STATUS_COLORS, INDUSTRY_OPTIONS, PRIORITY_OPTIONS, PRIORITY_COLORS, SOURCE_OPTIONS, STEP_TYPE_OPTIONS, STEP_TYPE_LABELS, EVENT_CATEGORY_OPTIONS, EVENT_CATEGORY_LABELS, CALENDAR_TYPE_COLORS, TRACK_TYPE_OPTIONS, TRACK_TYPE_LABELS } from '../store.js';
 import { Modal } from '../components/modal.js';
 import { Toast } from '../components/toast.js';
 import { FormUtils } from '../components/form-utils.js';
@@ -675,104 +675,210 @@ function openCompanyDetailModal(companyId) {
   var sectionsGrid = document.createElement('div');
   sectionsGrid.className = 'detail-sections-grid';
 
-  // --- D. 選考プロセスセクション ---
-  var stepsSection = document.createElement('div');
-  stepsSection.className = 'timeline-section';
-  stepsSection.innerHTML = '<div class="timeline-header">'
-    + '<h3 class="timeline-title">選考プロセス</h3>'
-    + '<button class="btn btn-primary btn-sm" id="btn-add-step">'
-    + '<i data-lucide="plus" class="icon-sm"></i> ステップ追加</button></div>';
+  // --- D. 選考トラックセクション ---
+  var tracksSection = document.createElement('div');
+  tracksSection.className = 'timeline-section';
+  var tracks = Store.getTracks(companyId);
 
-  setTimeout(function() {
-    var addStepBtn = document.getElementById('btn-add-step');
-    if (addStepBtn) {
-      addStepBtn.addEventListener('click', function() {
-        Modal.close();
-        setTimeout(function() { openStepFormModal(companyId); }, 250);
-      });
-    }
-  }, 50);
+  if (tracks.length === 0) {
+    // === すっぴん表示（トラック未登録） ===
+    tracksSection.innerHTML = '<div class="timeline-header">'
+      + '<h3 class="timeline-title">選考プロセス</h3>'
+      + '</div>'
+      + '<div class="empty-track-state">'
+      + '<div class="empty-track-icon"><i data-lucide="briefcase" style="width:32px;height:32px;"></i></div>'
+      + '<p class="empty-track-message">現在、登録されている選考はありません</p>'
+      + '<p class="empty-track-hint">エントリーしたら「選考を追加」で管理を始めましょう</p>'
+      + '<button class="btn btn-primary" id="btn-add-track">'
+      + '<i data-lucide="plus" class="icon-sm"></i> 選考を追加</button>'
+      + '</div>';
 
-  var stepsList = document.createElement('div');
-  stepsList.className = 'timeline-list';
-  var steps = Store.getSteps(companyId);
-
-  if (steps.length === 0) {
-    stepsList.innerHTML = '<p class="empty-state-text">選考ステップがまだ登録されていません</p>';
+    setTimeout(function() {
+      var addTrackBtn = document.getElementById('btn-add-track');
+      if (addTrackBtn) {
+        addTrackBtn.addEventListener('click', function() {
+          Modal.close();
+          setTimeout(function() { openTrackFormModal(companyId); }, 250);
+        });
+      }
+    }, 50);
   } else {
-    steps.sort(function(a, b) { return new Date(a.scheduledDate || 0) - new Date(b.scheduledDate || 0); });
-    for (var i = 0; i < steps.length; i++) {
-      var step = steps[i];
-      var stepItem = document.createElement('div');
-      stepItem.className = 'timeline-item';
-      var typeLabel = STEP_TYPE_LABELS[step.type] || step.type || 'その他';
-      var resultObj = RESULT_OPTIONS.find(function(r) { return r.value === step.result; });
-      var resultLabel = resultObj ? resultObj.label : '結果待ち';
+    // === トラック一覧表示 ===
+    tracksSection.innerHTML = '<div class="timeline-header">'
+      + '<h3 class="timeline-title">選考プロセス</h3>'
+      + '<button class="btn btn-primary btn-sm" id="btn-add-track-header">'
+      + '<i data-lucide="plus" class="icon-sm"></i> 選考を追加</button></div>';
 
-      var stepDateHtml = step.scheduledDate
-        ? '<span class="meta-item"><i data-lucide="calendar" class="icon-xs"></i> ' + DateUtils.formatDate(step.scheduledDate) + '</span>'
-        : '';
-      var stepLocHtml = step.location
-        ? '<span class="meta-item"><i data-lucide="map-pin" class="icon-xs"></i> ' + escapeHtml(step.location) + '</span>'
-        : '';
+    setTimeout(function() {
+      var addTrackHeaderBtn = document.getElementById('btn-add-track-header');
+      if (addTrackHeaderBtn) {
+        addTrackHeaderBtn.addEventListener('click', function() {
+          Modal.close();
+          setTimeout(function() { openTrackFormModal(companyId); }, 250);
+        });
+      }
+    }, 50);
 
-      stepItem.innerHTML = '<div class="timeline-marker"></div>'
-        + '<div class="timeline-content card">'
-        +   '<div class="timeline-content-header">'
-        +     '<div class="timeline-content-title-area">'
-        +       '<span class="badge badge-step-type">' + escapeHtml(typeLabel) + '</span>'
-        +       '<strong class="timeline-step-name">' + escapeHtml(step.stepName || typeLabel) + '</strong>'
-        +     '</div>'
-        +     '<div class="timeline-actions">'
-        +       '<span class="badge badge-result-' + (step.result || 'pending') + '">' + escapeHtml(resultLabel) + '</span>'
-        +       '<button class="btn-icon-sm btn-icon-danger" data-step-delete="' + step.id + '" title="削除">'
-        +         '<i data-lucide="trash-2" class="icon-sm"></i>'
-        +       '</button>'
-        +     '</div>'
-        +   '</div>'
-        +   '<div class="timeline-meta">' + stepDateHtml + stepLocHtml + '</div>'
-        + '</div>';
+    // 各トラックを描画
+    for (var ti = 0; ti < tracks.length; ti++) {
+      (function(track) {
+        var trackBlock = document.createElement('div');
+        trackBlock.className = 'track-block';
 
-      // 削除ボタンのイベント（クロージャで step を固定）
-      (function(stepId, stepDisplayName) {
+        var trackTypeLabel = TRACK_TYPE_LABELS[track.type] || track.type || 'その他';
+        var trackStatusLabel = STATUS_LABELS[track.status] || track.status || '興味あり';
+        var positionHtml = track.position
+          ? '<span class="track-position">【' + escapeHtml(track.position) + '】</span>'
+          : '';
+
+        // トラックヘッダー
+        trackBlock.innerHTML = '<div class="track-header">'
+          + '<div class="track-header-left">'
+          + '<span class="badge badge-track-type">' + escapeHtml(trackTypeLabel) + '</span>'
+          + positionHtml
+          + '<span class="badge ' + statusClass(track.status) + '">' + escapeHtml(trackStatusLabel) + '</span>'
+          + '</div>'
+          + '<div class="track-header-right">'
+          + '<button class="btn-icon-sm" data-track-edit="' + track.id + '" title="編集">'
+          + '<i data-lucide="edit-2" class="icon-sm"></i></button>'
+          + '<button class="btn-icon-sm btn-icon-danger" data-track-delete="' + track.id + '" title="削除">'
+          + '<i data-lucide="trash-2" class="icon-sm"></i></button>'
+          + '</div></div>';
+
+        // トラックメモ
+        if (track.memo) {
+          var trackMemoDiv = document.createElement('div');
+          trackMemoDiv.className = 'track-memo';
+          trackMemoDiv.innerHTML = '<i data-lucide="file-text" class="icon-xs"></i> ' + escapeHtml(track.memo);
+          trackBlock.appendChild(trackMemoDiv);
+        }
+
+        // トラック内のステップ
+        var trackSteps = Store.getSteps(companyId, track.id);
+        var stepsContainer = document.createElement('div');
+        stepsContainer.className = 'timeline-list';
+
+        if (trackSteps.length === 0) {
+          stepsContainer.innerHTML = '<p class="empty-state-text">ステップがまだ登録されていません</p>';
+        } else {
+          trackSteps.sort(function(a, b) { return new Date(a.scheduledDate || 0) - new Date(b.scheduledDate || 0); });
+          for (var si = 0; si < trackSteps.length; si++) {
+            var step = trackSteps[si];
+            var stepItem = document.createElement('div');
+            stepItem.className = 'timeline-item';
+            var typeLabel = STEP_TYPE_LABELS[step.type] || step.type || 'その他';
+            var resultObj = RESULT_OPTIONS.find(function(r) { return r.value === step.result; });
+            var resultLabel = resultObj ? resultObj.label : '結果待ち';
+
+            var stepDateHtml = step.scheduledDate
+              ? '<span class="meta-item"><i data-lucide="calendar" class="icon-xs"></i> ' + DateUtils.formatDate(step.scheduledDate) + '</span>'
+              : '';
+            var stepLocHtml = step.location
+              ? '<span class="meta-item"><i data-lucide="map-pin" class="icon-xs"></i> ' + escapeHtml(step.location) + '</span>'
+              : '';
+
+            stepItem.innerHTML = '<div class="timeline-marker"></div>'
+              + '<div class="timeline-content card">'
+              +   '<div class="timeline-content-header">'
+              +     '<div class="timeline-content-title-area">'
+              +       '<span class="badge badge-step-type">' + escapeHtml(typeLabel) + '</span>'
+              +       '<strong class="timeline-step-name">' + escapeHtml(step.stepName || typeLabel) + '</strong>'
+              +     '</div>'
+              +     '<div class="timeline-actions">'
+              +       '<span class="badge badge-result-' + (step.result || 'pending') + '">' + escapeHtml(resultLabel) + '</span>'
+              +       '<button class="btn-icon-sm btn-icon-danger" data-step-delete="' + step.id + '" title="削除">'
+              +         '<i data-lucide="trash-2" class="icon-sm"></i>'
+              +       '</button>'
+              +     '</div>'
+              +   '</div>'
+              +   '<div class="timeline-meta">' + stepDateHtml + stepLocHtml + '</div>'
+              + '</div>';
+
+            // ステップ削除ボタン
+            (function(stepId, stepDisplayName) {
+              setTimeout(function() {
+                var delBtn = stepItem.querySelector('[data-step-delete="' + stepId + '"]');
+                if (delBtn) {
+                  delBtn.addEventListener('click', function(e) {
+                    e.stopPropagation();
+                    Modal.confirm(
+                      'このステップ「' + stepDisplayName + '」を削除しますか？',
+                      function() {
+                        Store.deleteStep(stepId);
+                        Toast.show('ステップを削除しました', 'success');
+                        setTimeout(function() { openCompanyDetailModal(companyId); }, 250);
+                      },
+                      '削除'
+                    );
+                  });
+                }
+              }, 50);
+            })(step.id, step.stepName || typeLabel);
+
+            // 詳細情報
+            var details = step.details || {};
+            var detailLines = buildStepDetailLines(step.type, details);
+            if (detailLines.length > 0) {
+              var detailDiv = document.createElement('div');
+              detailDiv.className = 'timeline-details';
+              for (var dj = 0; dj < detailLines.length; dj++) {
+                var p = document.createElement('p');
+                p.innerHTML = '<span class="detail-label-inline">' + escapeHtml(detailLines[dj].label) + ':</span> ' + escapeHtml(detailLines[dj].value);
+                detailDiv.appendChild(p);
+              }
+              stepItem.querySelector('.timeline-content').appendChild(detailDiv);
+            }
+
+            stepsContainer.appendChild(stepItem);
+          }
+        }
+        trackBlock.appendChild(stepsContainer);
+
+        // 「＋ ステップ追加」ボタン（各トラック内）
+        var addStepDiv = document.createElement('div');
+        addStepDiv.className = 'track-add-step';
+        addStepDiv.innerHTML = '<button class="btn btn-secondary btn-sm" data-track-add-step="' + track.id + '">'
+          + '<i data-lucide="plus" class="icon-sm"></i> ステップ追加</button>';
+        trackBlock.appendChild(addStepDiv);
+
+        // トラック編集・削除・ステップ追加のイベントリスナー
         setTimeout(function() {
-          var delBtn = stepItem.querySelector('[data-step-delete="' + stepId + '"]');
-          if (delBtn) {
-            delBtn.addEventListener('click', function(e) {
+          var editBtn = trackBlock.querySelector('[data-track-edit="' + track.id + '"]');
+          if (editBtn) {
+            editBtn.addEventListener('click', function() {
+              Modal.close();
+              setTimeout(function() { openTrackFormModal(companyId, track.id); }, 250);
+            });
+          }
+          var deleteBtn = trackBlock.querySelector('[data-track-delete="' + track.id + '"]');
+          if (deleteBtn) {
+            deleteBtn.addEventListener('click', function(e) {
               e.stopPropagation();
               Modal.confirm(
-                'このステップ「' + stepDisplayName + '」を削除しますか？',
+                'この選考「' + trackTypeLabel + (track.position ? ' ' + track.position : '') + '」を削除しますか？\n（関連するステップも全て削除されます）',
                 function() {
-                  Store.deleteStep(stepId);
-                  Toast.show('ステップを削除しました', 'success');
+                  Store.deleteTrack(track.id);
+                  Toast.show('選考を削除しました', 'success');
                   setTimeout(function() { openCompanyDetailModal(companyId); }, 250);
                 },
                 '削除'
               );
             });
           }
+          var addStepBtn = trackBlock.querySelector('[data-track-add-step="' + track.id + '"]');
+          if (addStepBtn) {
+            addStepBtn.addEventListener('click', function() {
+              Modal.close();
+              setTimeout(function() { openStepFormModal(companyId, track.id); }, 250);
+            });
+          }
         }, 50);
-      })(step.id, step.stepName || typeLabel);
 
-      // 詳細情報
-      var details = step.details || {};
-      var detailLines = buildStepDetailLines(step.type, details);
-      if (detailLines.length > 0) {
-        var detailDiv = document.createElement('div');
-        detailDiv.className = 'timeline-details';
-        for (var j = 0; j < detailLines.length; j++) {
-          var p = document.createElement('p');
-          p.innerHTML = '<span class="detail-label-inline">' + escapeHtml(detailLines[j].label) + ':</span> ' + escapeHtml(detailLines[j].value);
-          detailDiv.appendChild(p);
-        }
-        stepItem.querySelector('.timeline-content').appendChild(detailDiv);
-      }
-
-      stepsList.appendChild(stepItem);
+        tracksSection.appendChild(trackBlock);
+      })(tracks[ti]);
     }
   }
-  stepsSection.appendChild(stepsList);
-  sectionsGrid.appendChild(stepsSection);
+  sectionsGrid.appendChild(tracksSection);
 
   // --- E. イベント履歴セクション ---
   var eventsSection = document.createElement('div');
@@ -878,6 +984,99 @@ function openCompanyDetailModal(companyId) {
 
 
 
+// =========================================================
+//  選考トラック追加・編集モーダル
+// =========================================================
+function openTrackFormModal(companyId, trackId) {
+  var company = Store.getCompany(companyId);
+  if (!company) return;
+  var existing = trackId ? Store.getTrack(trackId) : null;
+  var isEdit = !!existing;
+
+  var form = document.createElement('div');
+
+  // 選考区分
+  var typeOptionsHtml = '';
+  for (var i = 0; i < TRACK_TYPE_OPTIONS.length; i++) {
+    var opt = TRACK_TYPE_OPTIONS[i];
+    var selected = (existing && existing.type === opt) ? ' selected' : '';
+    typeOptionsHtml += '<option value="' + opt + '"' + selected + '>' + escapeHtml(TRACK_TYPE_LABELS[opt] || opt) + '</option>';
+  }
+  form.innerHTML = '<div class="form-group">'
+    + '<label class="form-label">選考区分</label>'
+    + '<select class="form-select" id="track-type">' + typeOptionsHtml + '</select>'
+    + '</div>';
+
+  // コース名（任意）
+  var positionDiv = document.createElement('div');
+  positionDiv.className = 'form-group';
+  positionDiv.innerHTML = '<label class="form-label">応募職種・コース名 <span class="form-hint">（任意）</span></label>'
+    + '<input type="text" class="form-input" id="track-position" placeholder="例: クラウドソリューションSEコース" value="' + escapeHtml(existing ? existing.position || '' : '') + '">';
+  form.appendChild(positionDiv);
+
+  // メモ（任意）
+  var memoDiv = document.createElement('div');
+  memoDiv.className = 'form-group';
+  memoDiv.innerHTML = '<label class="form-label">募集要項・メモ <span class="form-hint">（任意）</span></label>'
+    + '<textarea class="form-textarea" id="track-memo" rows="3" placeholder="例: ES締切7/15、プログラミング経験必須">' + escapeHtml(existing ? existing.memo || '' : '') + '</textarea>';
+  form.appendChild(memoDiv);
+
+  // ステータス
+  var statusOptionsHtml = '';
+  for (var j = 0; j < STATUS_OPTIONS.length; j++) {
+    var st = STATUS_OPTIONS[j];
+    var stSelected = '';
+    if (existing && existing.status === st) {
+      stSelected = ' selected';
+    } else if (!existing && st === 'interested') {
+      stSelected = ' selected';
+    }
+    statusOptionsHtml += '<option value="' + st + '"' + stSelected + '>' + escapeHtml(STATUS_LABELS[st] || st) + '</option>';
+  }
+  var statusDiv = document.createElement('div');
+  statusDiv.className = 'form-group';
+  statusDiv.innerHTML = '<label class="form-label">選考ステータス</label>'
+    + '<select class="form-select" id="track-status">' + statusOptionsHtml + '</select>';
+  form.appendChild(statusDiv);
+
+  Modal.open({
+    title: (isEdit ? '選考を編集' : '選考を追加') + ' — ' + escapeHtml(company.name),
+    content: form,
+    size: 'medium',
+    confirmText: isEdit ? '更新' : '追加',
+    onConfirm: function() {
+      var typeVal = document.getElementById('track-type').value;
+      var positionVal = (document.getElementById('track-position').value || '').trim();
+      var memoVal = (document.getElementById('track-memo').value || '').trim();
+      var statusVal = document.getElementById('track-status').value;
+
+      if (isEdit) {
+        Store.updateTrack(trackId, {
+          type: typeVal,
+          position: positionVal,
+          memo: memoVal,
+          status: statusVal
+        });
+        Toast.show('選考を更新しました', 'success');
+      } else {
+        Store.addTrack({
+          companyId: companyId,
+          type: typeVal,
+          position: positionVal,
+          memo: memoVal
+        });
+        // 新規作成時にステータスを設定
+        var tracks = Store.getTracks(companyId);
+        if (tracks.length > 0 && statusVal !== 'interested') {
+          Store.updateTrack(tracks[0].id, { status: statusVal });
+        }
+        Toast.show('選考を追加しました', 'success');
+      }
+
+      setTimeout(function() { openCompanyDetailModal(companyId); }, 250);
+    }
+  });
+}
 
 // =========================================================
 //  イベント追加モーダル（企業詳細から呼び出し）
@@ -1012,7 +1211,7 @@ function buildStepDetailLines(type, details) {
 // =========================================================
 //  選考ステップ追加モーダル
 // =========================================================
-function openStepFormModal(companyId) {
+function openStepFormModal(companyId, trackId) {
   const company = Store.getCompany(companyId);
   if (!company) return;
 
@@ -1086,13 +1285,14 @@ function openStepFormModal(companyId) {
       const details = extractStepDetails(type, data);
 
       Store.addStep({
-        companyId,
-        type,
+        companyId: companyId,
+        trackId: trackId || null,
+        type: type,
         stepName: data.stepName || '',
         scheduledDate: data.scheduledDate || '',
         location: data.location || '',
         result: data.result || 'pending',
-        details
+        details: details
       });
 
       Toast.show('ステップを追加しました', 'success');
