@@ -1043,8 +1043,8 @@ function openTrackFormModal(companyId, trackId) {
     title: (isEdit ? '選考を編集' : '選考を追加') + ' — ' + escapeHtml(company.name),
     content: form,
     size: 'medium',
-    confirmText: isEdit ? '更新' : '追加',
-    onConfirm: function() {
+    saveLabel: isEdit ? '更新' : '追加',
+    onSave: function() {
       var typeVal = document.getElementById('track-type').value;
       var positionVal = (document.getElementById('track-position').value || '').trim();
       var memoVal = (document.getElementById('track-memo').value || '').trim();
@@ -1073,6 +1073,7 @@ function openTrackFormModal(companyId, trackId) {
         Toast.show('選考を追加しました', 'success');
       }
 
+      Modal.close();
       setTimeout(function() { openCompanyDetailModal(companyId); }, 250);
     }
   });
