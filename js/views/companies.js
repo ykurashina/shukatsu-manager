@@ -786,6 +786,9 @@ function openCompanyDetailModal(companyId) {
               +     '</div>'
               +     '<div class="timeline-actions">'
               +       '<span class="badge badge-result-' + (step.result || 'pending') + '">' + escapeHtml(resultLabel) + '</span>'
+              +       '<button class="btn-icon-sm" data-step-edit="' + step.id + '" title="編集">'
+              +         '<i data-lucide="edit-2" class="icon-sm"></i>'
+              +       '</button>'
               +       '<button class="btn-icon-sm btn-icon-danger" data-step-delete="' + step.id + '" title="削除">'
               +         '<i data-lucide="trash-2" class="icon-sm"></i>'
               +       '</button>'
@@ -794,9 +797,17 @@ function openCompanyDetailModal(companyId) {
               +   '<div class="timeline-meta">' + stepDateHtml + stepLocHtml + '</div>'
               + '</div>';
 
-            // ステップ削除ボタン
-            (function(stepId, stepDisplayName) {
+            // ステップ編集・削除ボタン
+            (function(stepId, stepDisplayName, stepTrackId) {
               setTimeout(function() {
+                var editBtn = stepItem.querySelector('[data-step-edit="' + stepId + '"]');
+                if (editBtn) {
+                  editBtn.addEventListener('click', function(e) {
+                    e.stopPropagation();
+                    Modal.close();
+                    setTimeout(function() { openStepFormModal(companyId, stepTrackId, stepId); }, 250);
+                  });
+                }
                 var delBtn = stepItem.querySelector('[data-step-delete="' + stepId + '"]');
                 if (delBtn) {
                   delBtn.addEventListener('click', function(e) {
@@ -813,7 +824,7 @@ function openCompanyDetailModal(companyId) {
                   });
                 }
               }, 50);
-            })(step.id, step.stepName || typeLabel);
+            })(step.id, step.stepName || typeLabel, track.id);
 
             // 詳細情報
             var details = step.details || {};
@@ -1176,13 +1187,25 @@ function openEventFormModal(companyId) {
 // ステップ詳細テキスト生成
 // ---------------------
 function buildStepDetailLines(type, details) {
-  const lines = [];
+  var lines = [];
   switch (type) {
+    case 'es':
+      if (details.questionTitle) lines.push({ label: '設問タイトル', value: details.questionTitle });
+      if (details.charLimit) lines.push({ label: '文字数上限', value: details.charLimit + '字' });
+      if (details.submissionMemo) lines.push({ label: '提出メモ', value: details.submissionMemo });
+      break;
     case 'webtest':
       if (details.testType) lines.push({ label: 'テスト種類', value: details.testType });
       if (details.method) lines.push({ label: '受験方法', value: details.method });
       if (details.examUrl) lines.push({ label: '受験URL', value: details.examUrl });
       if (details.confidence) lines.push({ label: '手応え', value: details.confidence });
+      break;
+    case 'gd':
+      if (details.theme) lines.push({ label: 'テーマ', value: details.theme });
+      if (details.participants) lines.push({ label: '参加人数', value: details.participants + '人' });
+      if (details.role) lines.push({ label: '役割', value: details.role });
+      if (details.confidence) lines.push({ label: '手応え', value: details.confidence });
+      if (details.reflection) lines.push({ label: '反省・メモ', value: details.reflection });
       break;
     case 'interview':
       if (details.round) lines.push({ label: '次数', value: details.round });
@@ -1195,12 +1218,16 @@ function buildStepDetailLines(type, details) {
       if (details.answers) lines.push({ label: '回答内容', value: details.answers });
       if (details.reflection) lines.push({ label: '反省点', value: details.reflection });
       break;
-    case 'intern_selection':
+    case 'intern_day':
       if (details.internType) lines.push({ label: 'インターン種別', value: details.internType });
       if (details.duration) lines.push({ label: '期間', value: details.duration });
-      if (details.confidence) lines.push({ label: '手応え', value: details.confidence });
-      if (details.advantage) lines.push({ label: '獲得優遇', value: details.advantage });
+      if (details.content) lines.push({ label: '実施内容', value: details.content });
       if (details.learnings) lines.push({ label: '学び・感想', value: details.learnings });
+      break;
+    case 'offer':
+      if (details.offerDate) lines.push({ label: '内定連絡日', value: details.offerDate });
+      if (details.deadline) lines.push({ label: '承諾期限', value: details.deadline });
+      if (details.conditions) lines.push({ label: '条件・メモ', value: details.conditions });
       break;
     default:
       if (details.freeText) lines.push({ label: 'メモ', value: details.freeText });
@@ -1212,97 +1239,136 @@ function buildStepDetailLines(type, details) {
 // =========================================================
 //  選考ステップ追加モーダル
 // =========================================================
-function openStepFormModal(companyId, trackId) {
-  const company = Store.getCompany(companyId);
+function openStepFormModal(companyId, trackId, stepId) {
+  var company = Store.getCompany(companyId);
   if (!company) return;
+  var existing = stepId ? Store.getStep(stepId) : null;
+  var isEdit = !!existing;
 
-  const form = document.createElement('div');
+  // トラック名をヘッダーに表示
+  var trackLabel = '';
+  if (trackId) {
+    var track = Store.getTrack(trackId);
+    if (track) {
+      var trackTypeName = TRACK_TYPE_LABELS[track.type] || track.type || '';
+      trackLabel = ' [' + trackTypeName + (track.position ? ': ' + track.position : '') + ']';
+    }
+  }
+
+  var form = document.createElement('div');
   form.className = 'modal-form';
 
   // ステップ種類
-  const typeSelect = FormUtils.createSelect(
-    STEP_TYPE_OPTIONS.map(t => ({ value: t, label: STEP_TYPE_LABELS[t] })),
-    '',
-    { name: 'type', id: 'step-type-select' }
-  );
-  form.appendChild(FormUtils.createFormGroup('ステップ種類', typeSelect, { required: true }));
+  var typeOptionsHtml = '<option value="">-- 選択 --</option>';
+  for (var i = 0; i < STEP_TYPE_OPTIONS.length; i++) {
+    var t = STEP_TYPE_OPTIONS[i];
+    var sel = (existing && existing.type === t) ? ' selected' : '';
+    typeOptionsHtml += '<option value="' + t + '"' + sel + '>' + escapeHtml(STEP_TYPE_LABELS[t] || t) + '</option>';
+  }
+  var typeGroup = document.createElement('div');
+  typeGroup.className = 'form-group';
+  typeGroup.innerHTML = '<label class="form-label">ステップ種類 <span style="color:#ef4444;">*</span></label>'
+    + '<select class="form-select" name="type" id="step-type-select">' + typeOptionsHtml + '</select>';
+  form.appendChild(typeGroup);
 
   // ステップ名
-  form.appendChild(
-    FormUtils.createFormGroup('ステップ名',
-      FormUtils.createInput('text', '例：一次面接', '', { name: 'stepName' })
-    )
-  );
+  var nameGroup = document.createElement('div');
+  nameGroup.className = 'form-group';
+  nameGroup.innerHTML = '<label class="form-label">ステップ名</label>'
+    + '<input type="text" class="form-input" name="stepName" placeholder="例：一次面接" value="' + escapeHtml(existing ? existing.stepName || '' : '') + '">';
+  form.appendChild(nameGroup);
 
-  // 日時
-  form.appendChild(
-    FormUtils.createFormGroup('予定日',
-      FormUtils.createInput('date', '', '', { name: 'scheduledDate' })
-    )
-  );
+  // 予定日
+  var dateGroup = document.createElement('div');
+  dateGroup.className = 'form-group';
+  dateGroup.innerHTML = '<label class="form-label">予定日</label>'
+    + '<input type="date" class="form-input" name="scheduledDate" value="' + (existing ? existing.scheduledDate || '' : '') + '">';
+  form.appendChild(dateGroup);
 
   // 場所
-  form.appendChild(
-    FormUtils.createFormGroup('場所',
-      FormUtils.createInput('text', '例：東京本社 / オンライン', '', { name: 'location' })
-    )
-  );
+  var locGroup = document.createElement('div');
+  locGroup.className = 'form-group';
+  locGroup.innerHTML = '<label class="form-label">場所</label>'
+    + '<input type="text" class="form-input" name="location" placeholder="例：東京本社 / オンライン" value="' + escapeHtml(existing ? existing.location || '' : '') + '">';
+  form.appendChild(locGroup);
 
   // 結果
-  form.appendChild(
-    FormUtils.createFormGroup('結果',
-      FormUtils.createSelect(
-        RESULT_OPTIONS,
-        'pending',
-        { name: 'result' }
-      )
-    )
-  );
+  var resultOptionsHtml = '';
+  for (var r = 0; r < RESULT_OPTIONS.length; r++) {
+    var ro = RESULT_OPTIONS[r];
+    var rSel = (existing && existing.result === ro.value) ? ' selected' : '';
+    if (!existing && ro.value === 'pending') rSel = ' selected';
+    resultOptionsHtml += '<option value="' + ro.value + '"' + rSel + '>' + escapeHtml(ro.label) + '</option>';
+  }
+  var resultGroup = document.createElement('div');
+  resultGroup.className = 'form-group';
+  resultGroup.innerHTML = '<label class="form-label">結果</label>'
+    + '<select class="form-select" name="result">' + resultOptionsHtml + '</select>';
+  form.appendChild(resultGroup);
 
   // 動的フィールドコンテナ
-  const dynamicFields = document.createElement('div');
+  var dynamicFields = document.createElement('div');
   dynamicFields.id = 'step-dynamic-fields';
   form.appendChild(dynamicFields);
 
   // type変更時に動的フィールドを更新
-  typeSelect.addEventListener('change', () => {
-    renderStepDynamicFields(typeSelect.value, dynamicFields);
+  var typeSelect = form.querySelector('#step-type-select');
+  typeSelect.addEventListener('change', function() {
+    renderStepDynamicFields(typeSelect.value, dynamicFields, null);
   });
 
+  // 編集時: 既存typeに応じた動的フィールドをプリフィル表示
+  if (existing && existing.type) {
+    setTimeout(function() {
+      renderStepDynamicFields(existing.type, dynamicFields, existing.details || {});
+    }, 50);
+  }
+
   Modal.open({
-    title: `${company.name} — ステップ追加`,
+    title: company.name + ' — ' + (isEdit ? 'ステップ編集' : 'ステップ追加') + trackLabel,
     content: form,
     size: 'large',
-    saveLabel: '追加',
-    onSave: (modal) => {
-      const data = FormUtils.collectFormData(modal);
-      const type = data.type;
+    saveLabel: isEdit ? '更新' : '追加',
+    onSave: function(modal) {
+      var data = FormUtils.collectFormData(modal);
+      var type = data.type;
       if (!type) {
         Toast.show('ステップ種類を選択してください', 'error');
         return;
       }
 
       // details をまとめる
-      const details = extractStepDetails(type, data);
+      var details = extractStepDetails(type, data);
 
-      Store.addStep({
-        companyId: companyId,
-        trackId: trackId || null,
-        type: type,
-        stepName: data.stepName || '',
-        scheduledDate: data.scheduledDate || '',
-        location: data.location || '',
-        result: data.result || 'pending',
-        details: details
-      });
+      if (isEdit) {
+        Store.updateStep(stepId, {
+          type: type,
+          stepName: data.stepName || '',
+          scheduledDate: data.scheduledDate || '',
+          location: data.location || '',
+          result: data.result || 'pending',
+          details: details
+        });
+        Toast.show('ステップを更新しました', 'success');
+      } else {
+        Store.addStep({
+          companyId: companyId,
+          trackId: trackId || null,
+          type: type,
+          stepName: data.stepName || '',
+          scheduledDate: data.scheduledDate || '',
+          location: data.location || '',
+          result: data.result || 'pending',
+          details: details
+        });
+        Toast.show('ステップを追加しました', 'success');
+      }
 
-      Toast.show('ステップを追加しました', 'success');
       Modal.close();
-      setTimeout(() => openCompanyDetailModal(companyId), 250);
+      setTimeout(function() { openCompanyDetailModal(companyId); }, 250);
     },
-    onClose: () => {
-      // 詳細モーダルに戻る
-      setTimeout(() => openCompanyDetailModal(companyId), 250);
+    onClose: function() {
+      setTimeout(function() { openCompanyDetailModal(companyId); }, 250);
     }
   });
 
@@ -1312,21 +1378,39 @@ function openStepFormModal(companyId, trackId) {
 // ---------------------
 // 動的フィールドレンダリング
 // ---------------------
-function renderStepDynamicFields(type, container) {
+function renderStepDynamicFields(type, container, existingDetails) {
   container.innerHTML = '';
-
   if (!type) return;
+  var d = existingDetails || {};
 
-  const divider = document.createElement('hr');
+  var divider = document.createElement('hr');
   divider.className = 'form-divider';
   container.appendChild(divider);
 
-  const heading = document.createElement('h4');
+  var heading = document.createElement('h4');
   heading.className = 'form-section-title';
-  heading.textContent = `${STEP_TYPE_LABELS[type] || type} 詳細`;
+  heading.textContent = (STEP_TYPE_LABELS[type] || type) + ' 詳細';
   container.appendChild(heading);
 
   switch (type) {
+    case 'es':
+      container.appendChild(
+        FormUtils.createFormGroup('設問タイトル',
+          FormUtils.createInput('text', '例：学生時代に力を入れたこと', d.questionTitle || '', { name: 'detail_questionTitle' })
+        )
+      );
+      container.appendChild(
+        FormUtils.createFormGroup('文字数上限',
+          FormUtils.createInput('number', '例：400', d.charLimit || '', { name: 'detail_charLimit' })
+        )
+      );
+      container.appendChild(
+        FormUtils.createFormGroup('提出メモ',
+          FormUtils.createTextarea('提出に関するメモ', d.submissionMemo || '', 0, { name: 'detail_submissionMemo', rows: 3 })
+        )
+      );
+      break;
+
     case 'webtest':
       container.appendChild(
         FormUtils.createFormGroup('テスト種類',
@@ -1339,7 +1423,7 @@ function renderStepDynamicFields(type, container) {
               { value: 'CAB', label: 'CAB' },
               { value: 'その他', label: 'その他' }
             ],
-            '',
+            d.testType || '',
             { name: 'detail_testType' }
           )
         )
@@ -1352,14 +1436,14 @@ function renderStepDynamicFields(type, container) {
               { value: 'テストセンター', label: 'テストセンター' },
               { value: '会場受験', label: '会場受験' }
             ],
-            '',
+            d.method || '',
             { name: 'detail_method' }
           )
         )
       );
       container.appendChild(
         FormUtils.createFormGroup('受験URL',
-          FormUtils.createInput('url', 'https://...', '', { name: 'detail_examUrl' })
+          FormUtils.createInput('url', 'https://...', d.examUrl || '', { name: 'detail_examUrl' })
         )
       );
       container.appendChild(
@@ -1371,9 +1455,56 @@ function renderStepDynamicFields(type, container) {
               { value: '△', label: '△ 微妙' },
               { value: '×', label: '× 厳しい' }
             ],
-            '',
+            d.confidence || '',
             { name: 'detail_confidence' }
           )
+        )
+      );
+      break;
+
+    case 'gd':
+      container.appendChild(
+        FormUtils.createFormGroup('テーマ',
+          FormUtils.createInput('text', '例：新規事業の提案', d.theme || '', { name: 'detail_theme' })
+        )
+      );
+      container.appendChild(
+        FormUtils.createFormGroup('参加人数',
+          FormUtils.createInput('number', '例：6', d.participants || '', { name: 'detail_participants' })
+        )
+      );
+      container.appendChild(
+        FormUtils.createFormGroup('自分の役割',
+          FormUtils.createSelect(
+            [
+              { value: 'リーダー', label: 'リーダー' },
+              { value: '書記', label: '書記' },
+              { value: 'タイムキーパー', label: 'タイムキーパー' },
+              { value: '発表者', label: '発表者' },
+              { value: 'その他', label: 'その他' }
+            ],
+            d.role || '',
+            { name: 'detail_role' }
+          )
+        )
+      );
+      container.appendChild(
+        FormUtils.createFormGroup('手応え',
+          FormUtils.createSelect(
+            [
+              { value: '◎', label: '◎ とても良い' },
+              { value: '○', label: '○ まあまあ' },
+              { value: '△', label: '△ 微妙' },
+              { value: '×', label: '× 厳しい' }
+            ],
+            d.confidence || '',
+            { name: 'detail_confidence' }
+          )
+        )
+      );
+      container.appendChild(
+        FormUtils.createFormGroup('反省・メモ',
+          FormUtils.createTextarea('GDの反省点や気づき', d.reflection || '', 0, { name: 'detail_reflection', rows: 3 })
         )
       );
       break;
@@ -1388,7 +1519,7 @@ function renderStepDynamicFields(type, container) {
               { value: '三次', label: '三次' },
               { value: '最終', label: '最終' }
             ],
-            '',
+            d.round || '',
             { name: 'detail_round' }
           )
         )
@@ -1398,10 +1529,9 @@ function renderStepDynamicFields(type, container) {
           FormUtils.createSelect(
             [
               { value: '個人面接', label: '個人面接' },
-              { value: '集団面接', label: '集団面接' },
-              { value: 'GD', label: 'グループディスカッション' }
+              { value: '集団面接', label: '集団面接' }
             ],
-            '',
+            d.format || '',
             { name: 'detail_format' }
           )
         )
@@ -1414,14 +1544,14 @@ function renderStepDynamicFields(type, container) {
               { value: 'オンライン', label: 'オンライン' },
               { value: 'ハイブリッド', label: 'ハイブリッド' }
             ],
-            '',
+            d.interviewMethod || '',
             { name: 'detail_interviewMethod' }
           )
         )
       );
       container.appendChild(
         FormUtils.createFormGroup('面接官人数',
-          FormUtils.createInput('number', '例：2', '', { name: 'detail_interviewerCount' })
+          FormUtils.createInput('number', '例：2', d.interviewerCount || '', { name: 'detail_interviewerCount' })
         )
       );
       container.appendChild(
@@ -1433,7 +1563,7 @@ function renderStepDynamicFields(type, container) {
               { value: '厳しい', label: '厳しい' },
               { value: '圧迫', label: '圧迫' }
             ],
-            '',
+            d.atmosphere || '',
             { name: 'detail_atmosphere' }
           )
         )
@@ -1447,29 +1577,29 @@ function renderStepDynamicFields(type, container) {
               { value: '△', label: '△ 微妙' },
               { value: '×', label: '× 厳しい' }
             ],
-            '',
+            d.confidence || '',
             { name: 'detail_confidence' }
           )
         )
       );
       container.appendChild(
         FormUtils.createFormGroup('質問内容',
-          FormUtils.createTextarea('聞かれた質問を記録', '', 0, { name: 'detail_questions', rows: 3 })
+          FormUtils.createTextarea('聞かれた質問を記録', d.questions || '', 0, { name: 'detail_questions', rows: 3 })
         )
       );
       container.appendChild(
         FormUtils.createFormGroup('回答内容',
-          FormUtils.createTextarea('自分の回答を記録', '', 0, { name: 'detail_answers', rows: 3 })
+          FormUtils.createTextarea('自分の回答を記録', d.answers || '', 0, { name: 'detail_answers', rows: 3 })
         )
       );
       container.appendChild(
         FormUtils.createFormGroup('反省点',
-          FormUtils.createTextarea('改善点・気づきを記録', '', 0, { name: 'detail_reflection', rows: 3 })
+          FormUtils.createTextarea('改善点・気づきを記録', d.reflection || '', 0, { name: 'detail_reflection', rows: 3 })
         )
       );
       break;
 
-    case 'intern_selection':
+    case 'intern_day':
       container.appendChild(
         FormUtils.createFormGroup('インターン種別',
           FormUtils.createSelect(
@@ -1478,48 +1608,42 @@ function renderStepDynamicFields(type, container) {
               { value: '短期（2〜5日）', label: '短期（2〜5日）' },
               { value: '長期（1週間以上）', label: '長期（1週間以上）' }
             ],
-            '',
+            d.internType || '',
             { name: 'detail_internType' }
           )
         )
       );
       container.appendChild(
         FormUtils.createFormGroup('期間',
-          FormUtils.createInput('text', '例：8/20〜8/24（5日間）', '', { name: 'detail_duration' })
+          FormUtils.createInput('text', '例：8/20〜8/24（5日間）', d.duration || '', { name: 'detail_duration' })
         )
       );
       container.appendChild(
-        FormUtils.createFormGroup('手応え',
-          FormUtils.createSelect(
-            [
-              { value: '◎', label: '◎ とても良い' },
-              { value: '○', label: '○ まあまあ' },
-              { value: '△', label: '△ 微妙' },
-              { value: '×', label: '× 厳しい' }
-            ],
-            '',
-            { name: 'detail_confidence' }
-          )
+        FormUtils.createFormGroup('実施内容',
+          FormUtils.createTextarea('インターンでの内容', d.content || '', 0, { name: 'detail_content', rows: 3 })
         )
       );
       container.appendChild(
-        FormUtils.createFormGroup('獲得優遇',
-          FormUtils.createSelect(
-            [
-              { value: 'なし', label: 'なし' },
-              { value: '早期選考', label: '早期選考' },
-              { value: '一次免除', label: '一次免除' },
-              { value: 'ES免除', label: 'ES免除' },
-              { value: 'その他', label: 'その他' }
-            ],
-            '',
-            { name: 'detail_advantage' }
-          )
+        FormUtils.createFormGroup('学び・感想',
+          FormUtils.createTextarea('学んだこと・感想を記録', d.learnings || '', 0, { name: 'detail_learnings', rows: 3 })
+        )
+      );
+      break;
+
+    case 'offer':
+      container.appendChild(
+        FormUtils.createFormGroup('内定連絡日',
+          FormUtils.createInput('date', '', d.offerDate || '', { name: 'detail_offerDate' })
         )
       );
       container.appendChild(
-        FormUtils.createFormGroup('学び・感想メモ',
-          FormUtils.createTextarea('インターンで学んだこと・感想を記録', '', 0, { name: 'detail_learnings', rows: 4 })
+        FormUtils.createFormGroup('承諾期限',
+          FormUtils.createInput('date', '', d.deadline || '', { name: 'detail_deadline' })
+        )
+      );
+      container.appendChild(
+        FormUtils.createFormGroup('条件・メモ',
+          FormUtils.createTextarea('給与・勤務地・その他条件メモ', d.conditions || '', 0, { name: 'detail_conditions', rows: 3 })
         )
       );
       break;
@@ -1528,7 +1652,7 @@ function renderStepDynamicFields(type, container) {
     default:
       container.appendChild(
         FormUtils.createFormGroup('自由記述',
-          FormUtils.createTextarea('詳細を自由に記入', '', 0, { name: 'detail_freeText', rows: 4 })
+          FormUtils.createTextarea('詳細を自由に記入', d.freeText || '', 0, { name: 'detail_freeText', rows: 4 })
         )
       );
       break;
