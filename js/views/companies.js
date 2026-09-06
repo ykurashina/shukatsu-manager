@@ -1,6 +1,6 @@
 // companies.js — 企業管理テーブルビュー
 
-import { Store, STATUS_OPTIONS, STATUS_LABELS, STATUS_COLORS, INDUSTRY_OPTIONS, PRIORITY_OPTIONS, PRIORITY_COLORS, SOURCE_OPTIONS, STEP_TYPE_OPTIONS, STEP_TYPE_LABELS, EVENT_CATEGORY_OPTIONS, EVENT_CATEGORY_LABELS, CALENDAR_TYPE_COLORS, TRACK_TYPE_OPTIONS, TRACK_TYPE_LABELS } from '../store.js';
+import { Store, STATUS_OPTIONS, STATUS_LABELS, STATUS_COLORS, INDUSTRY_OPTIONS, PRIORITY_OPTIONS, PRIORITY_COLORS, SOURCE_OPTIONS, STEP_TYPE_OPTIONS, STEP_TYPE_LABELS, EVENT_CATEGORY_OPTIONS, EVENT_CATEGORY_LABELS, CALENDAR_TYPE_COLORS, TRACK_TYPE_OPTIONS, TRACK_TYPE_LABELS, COMPANY_EVENT_OPTIONS } from '../store.js';
 import { Modal } from '../components/modal.js';
 import { Toast } from '../components/toast.js';
 import { FormUtils } from '../components/form-utils.js';
@@ -934,6 +934,10 @@ function openCompanyDetailModal(companyId) {
         ? '<div class="timeline-details"><p>' + escapeHtml(ev.memo) + '</p></div>'
         : '';
 
+      var evUrlHtml = ev.url
+        ? '<span class="meta-item"><a href="' + escapeHtml(ev.url) + '" target="_blank" rel="noopener noreferrer"><i data-lucide="external-link" class="icon-xs"></i> 参加URL</a></span>'
+        : '';
+
       evItem.innerHTML = '<div class="timeline-marker" style="background-color: ' + evColor + ';"></div>'
         + '<div class="timeline-content card">'
         +   '<div class="timeline-content-header">'
@@ -942,18 +946,29 @@ function openCompanyDetailModal(companyId) {
         +       '<strong class="timeline-step-name">' + escapeHtml(ev.title || catLabel) + '</strong>'
         +     '</div>'
         +     '<div class="timeline-actions">'
+        +       '<button class="btn-icon-sm" data-event-edit="' + ev.id + '" title="編集">'
+        +         '<i data-lucide="edit-2" class="icon-sm"></i>'
+        +       '</button>'
         +       '<button class="btn-icon-sm btn-icon-danger" data-event-delete="' + ev.id + '" title="削除">'
         +         '<i data-lucide="trash-2" class="icon-sm"></i>'
         +       '</button>'
         +     '</div>'
         +   '</div>'
-        +   '<div class="timeline-meta">' + evDateHtml + evLocHtml + '</div>'
+        +   '<div class="timeline-meta">' + evDateHtml + evLocHtml + evUrlHtml + '</div>'
         +   evMemoHtml
         + '</div>';
 
-      // イベント削除ボタン
+      // イベント編集・削除ボタン
       (function(evId, evDisplayName) {
         setTimeout(function() {
+          var editBtn = evItem.querySelector('[data-event-edit="' + evId + '"]');
+          if (editBtn) {
+            editBtn.addEventListener('click', function(e) {
+              e.stopPropagation();
+              Modal.close();
+              setTimeout(function() { openEventFormModal(companyId, evId); }, 250);
+            });
+          }
           var delBtn = evItem.querySelector('[data-event-delete="' + evId + '"]');
           if (delBtn) {
             delBtn.addEventListener('click', function(e) {
@@ -1093,62 +1108,68 @@ function openTrackFormModal(companyId, trackId) {
 // =========================================================
 //  イベント追加モーダル（企業詳細から呼び出し）
 // =========================================================
-function openEventFormModal(companyId) {
+function openEventFormModal(companyId, eventId) {
   var company = Store.getCompany(companyId);
   if (!company) return;
+  var existing = eventId ? Store.getEvent(eventId) : null;
+  var isEdit = !!existing;
 
   var form = document.createElement('div');
   form.className = 'modal-form';
 
-  // イベント種別
-  var categorySelect = FormUtils.createSelect(
-    EVENT_CATEGORY_OPTIONS.map(function(c) { return { value: c, label: EVENT_CATEGORY_LABELS[c] }; }),
-    '',
-    { name: 'category', id: 'event-category-select' }
-  );
-  form.appendChild(FormUtils.createFormGroup('イベント種別', categorySelect, { required: true }));
+  // イベント種別（企業個別イベントのみ: COMPANY_EVENT_OPTIONS）
+  var catOptionsHtml = '<option value="">-- 選択 --</option>';
+  for (var i = 0; i < COMPANY_EVENT_OPTIONS.length; i++) {
+    var c = COMPANY_EVENT_OPTIONS[i];
+    var sel = (existing && existing.category === c) ? ' selected' : '';
+    catOptionsHtml += '<option value="' + c + '"' + sel + '>' + escapeHtml(EVENT_CATEGORY_LABELS[c] || c) + '</option>';
+  }
+  var catGroup = document.createElement('div');
+  catGroup.className = 'form-group';
+  catGroup.innerHTML = '<label class="form-label">イベント種別 <span style="color:#ef4444;">*</span></label>'
+    + '<select class="form-select" name="category">' + catOptionsHtml + '</select>';
+  form.appendChild(catGroup);
 
   // タイトル
-  form.appendChild(
-    FormUtils.createFormGroup('タイトル',
-      FormUtils.createInput('text', '例：夏季1Dayインターン', '', { name: 'title' })
-    )
-  );
+  var titleGroup = document.createElement('div');
+  titleGroup.className = 'form-group';
+  titleGroup.innerHTML = '<label class="form-label">タイトル</label>'
+    + '<input type="text" class="form-input" name="title" placeholder="例：夏季1Dayインターン" value="' + escapeHtml(existing ? existing.title || '' : '') + '">';
+  form.appendChild(titleGroup);
 
   // 日付
-  form.appendChild(
-    FormUtils.createFormGroup('日付',
-      FormUtils.createInput('date', '', '', { name: 'date' }),
-      { required: true }
-    )
-  );
+  var dateGroup = document.createElement('div');
+  dateGroup.className = 'form-group';
+  dateGroup.innerHTML = '<label class="form-label">日付 <span style="color:#ef4444;">*</span></label>'
+    + '<input type="date" class="form-input" name="date" value="' + (existing ? existing.date || '' : '') + '">';
+  form.appendChild(dateGroup);
 
   // 場所
-  form.appendChild(
-    FormUtils.createFormGroup('場所',
-      FormUtils.createInput('text', '例：東京本社 / オンライン', '', { name: 'location' })
-    )
-  );
+  var locGroup = document.createElement('div');
+  locGroup.className = 'form-group';
+  locGroup.innerHTML = '<label class="form-label">場所</label>'
+    + '<input type="text" class="form-input" name="location" placeholder="例：東京本社 / オンライン" value="' + escapeHtml(existing ? existing.location || '' : '') + '">';
+  form.appendChild(locGroup);
 
   // 参加URL
-  form.appendChild(
-    FormUtils.createFormGroup('参加URL',
-      FormUtils.createInput('url', 'https://...', '', { name: 'url' })
-    )
-  );
+  var urlGroup = document.createElement('div');
+  urlGroup.className = 'form-group';
+  urlGroup.innerHTML = '<label class="form-label">参加URL</label>'
+    + '<input type="url" class="form-input" name="url" placeholder="https://..." value="' + escapeHtml(existing ? existing.url || '' : '') + '">';
+  form.appendChild(urlGroup);
 
   // メモ
-  form.appendChild(
-    FormUtils.createFormGroup('メモ',
-      FormUtils.createTextarea('イベントに関するメモ', '', 0, { name: 'memo', rows: 3 })
-    )
-  );
+  var memoGroup = document.createElement('div');
+  memoGroup.className = 'form-group';
+  memoGroup.innerHTML = '<label class="form-label">メモ</label>'
+    + '<textarea class="form-textarea" name="memo" rows="3" placeholder="イベントに関するメモ">' + escapeHtml(existing ? existing.memo || '' : '') + '</textarea>';
+  form.appendChild(memoGroup);
 
   Modal.open({
-    title: company.name + ' — イベント追加',
+    title: company.name + ' — ' + (isEdit ? 'イベント編集' : 'イベント追加'),
     content: form,
     size: 'medium',
-    saveLabel: '追加',
+    saveLabel: isEdit ? '更新' : '追加',
     onSave: function(modal) {
       var data = FormUtils.collectFormData(modal);
       if (!data.category) {
@@ -1160,18 +1181,30 @@ function openEventFormModal(companyId) {
         return;
       }
 
-      Store.addEvent({
-        companyId: companyId,
-        category: data.category,
-        title: data.title || '',
-        date: data.date,
-        location: data.location || '',
-        companyName: company.name || '',
-        url: data.url || '',
-        memo: data.memo || ''
-      });
+      if (isEdit) {
+        Store.updateEvent(eventId, {
+          category: data.category,
+          title: data.title || '',
+          date: data.date,
+          location: data.location || '',
+          url: data.url || '',
+          memo: data.memo || ''
+        });
+        Toast.show('イベントを更新しました', 'success');
+      } else {
+        Store.addEvent({
+          companyId: companyId,
+          category: data.category,
+          title: data.title || '',
+          date: data.date,
+          location: data.location || '',
+          companyName: company.name || '',
+          url: data.url || '',
+          memo: data.memo || ''
+        });
+        Toast.show('イベントを追加しました', 'success');
+      }
 
-      Toast.show('イベントを追加しました', 'success');
       Modal.close();
       setTimeout(function() { openCompanyDetailModal(companyId); }, 250);
     },
