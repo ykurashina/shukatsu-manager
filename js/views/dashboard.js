@@ -1,18 +1,21 @@
 // dashboard.js — ダッシュボードビュー
 
-import { Store, STATUS_LABELS, STATUS_COLORS, EVENT_TYPE_COLORS } from '../store.js';
+import { Store, STATUS_LABELS, STATUS_COLORS, CALENDAR_TYPE_COLORS, STEP_TYPE_LABELS, EVENT_CATEGORY_LABELS } from '../store.js';
 import { DateUtils } from '../utils/date.js';
 import { fetchNewsFromRSS } from '../utils/api.js';
+import { openEventDetailModal } from './event-detail.js';
 
-// イベントタイプの日本語ラベル
-const EVENT_TYPE_LABELS = {
-  es_deadline: 'ES締切',
-  interview: '面接',
-  briefing: '説明会',
-  webtest: 'Webテスト',
-  obog: 'OB/OG訪問',
-  other: 'その他'
-};
+// カレンダー用ラベル統合（ステップ系 + イベント系）
+var DASH_TYPE_LABELS = {};
+var _sk;
+for (_sk in STEP_TYPE_LABELS) {
+  if (STEP_TYPE_LABELS.hasOwnProperty(_sk)) DASH_TYPE_LABELS[_sk] = STEP_TYPE_LABELS[_sk];
+}
+var _ek;
+for (_ek in EVENT_CATEGORY_LABELS) {
+  if (EVENT_CATEGORY_LABELS.hasOwnProperty(_ek)) DASH_TYPE_LABELS[_ek] = EVENT_CATEGORY_LABELS[_ek];
+}
+DASH_TYPE_LABELS['es_deadline'] = 'ES締切';
 
 let _container = null;
 let _unsubscribe = null;
@@ -171,8 +174,8 @@ function _renderKPIGrid(stats) {
  */
 function _renderUpcomingEventsPanel(events) {
   const eventListHTML = events.length > 0
-    ? `<div class="event-list">${events.map(e => _renderEventItem(e)).join('')}</div>`
-    : `<p class="panel-empty-message">直近7日間の予定はありません</p>`;
+    ? '<div class="event-list">' + events.map(function(e, i) { return _renderEventItem(e, i); }).join('') + '</div>'
+    : '<p class="panel-empty-message">直近7日間の予定はありません</p>';
 
   return `
     <div class="dashboard-panel">
@@ -191,12 +194,12 @@ function _renderUpcomingEventsPanel(events) {
 /**
  * イベントアイテム1件のHTML生成
  */
-function _renderEventItem(event) {
+function _renderEventItem(event, index) {
   const daysUntil = DateUtils.daysUntil(event.date);
   const countdownLabel = DateUtils.daysUntilLabel(event.date);
   const dateLabel = DateUtils.formatShortDate(event.date);
-  const typeLabel = EVENT_TYPE_LABELS[event.type] || 'その他';
-  const dotColor = event.color || EVENT_TYPE_COLORS[event.type] || '#94a3b8';
+  const typeLabel = DASH_TYPE_LABELS[event.type] || 'その他';
+  const dotColor = event.color || CALENDAR_TYPE_COLORS[event.type] || '#94a3b8';
 
   // カウントダウンの色分け
   let countdownClass = 'countdown-later';
@@ -208,16 +211,16 @@ function _renderEventItem(event) {
     countdownClass = 'countdown-soon';
   }
 
-  return `
-    <div class="event-item" data-company-id="${event.companyId || ''}">
-      <div class="event-dot" style="background-color: ${dotColor};"></div>
-      <div class="event-info">
-        <div class="event-title">${_escapeHTML(event.title)}</div>
-        <div class="event-date">${dateLabel} ・ ${typeLabel}</div>
-      </div>
-      <span class="event-countdown ${countdownClass}">${countdownLabel}</span>
-    </div>
-  `;
+  var idxAttr = (typeof index === 'number') ? ' data-event-index="' + index + '"' : '';
+
+  return '<div class="event-item" data-company-id="' + (event.companyId || '') + '"' + idxAttr + ' style="cursor:pointer;">'
+    + '<div class="event-dot" style="background-color: ' + dotColor + ';"></div>'
+    + '<div class="event-info">'
+    + '<div class="event-title">' + _escapeHTML(event.title) + '</div>'
+    + '<div class="event-date">' + dateLabel + ' ・ ' + typeLabel + '</div>'
+    + '</div>'
+    + '<span class="event-countdown ' + countdownClass + '">' + countdownLabel + '</span>'
+    + '</div>';
 }
 
 /**
@@ -246,7 +249,7 @@ function _renderUrgentActionsPanel(actions) {
  */
 function _renderActionItem(action) {
   const countdownLabel = DateUtils.daysUntilLabel(action.date);
-  const typeLabel = EVENT_TYPE_LABELS[action.type] || 'その他';
+  const typeLabel = DASH_TYPE_LABELS[action.type] || 'その他';
 
   return `
     <div class="action-item" data-company-id="${action.companyId || ''}">
@@ -268,17 +271,22 @@ function _renderActionItem(action) {
 function _attachEventListeners() {
   if (!_container) return;
 
-  // イベントアイテムのクリックで企業詳細へ遷移
-  const eventItems = _container.querySelectorAll('.event-item[data-company-id]');
-  eventItems.forEach(item => {
-    item.style.cursor = 'pointer';
-    item.addEventListener('click', () => {
-      const companyId = item.dataset.companyId;
-      if (companyId) {
-        window.location.hash = `companies?id=${companyId}`;
-      }
-    });
-  });
+  // イベントアイテムのクリックで統一予定詳細モーダルを開く
+  var upcomingEvents = Store.getUpcomingEvents(7);
+  var eventItems = _container.querySelectorAll('.event-item[data-event-index]');
+  for (var i = 0; i < eventItems.length; i++) {
+    (function(item) {
+      item.addEventListener('click', function() {
+        var idx = parseInt(item.getAttribute('data-event-index'), 10);
+        var calEvent = upcomingEvents[idx];
+        if (calEvent) {
+          openEventDetailModal(calEvent, {
+            onDelete: function() { if (_container) _renderContent(); }
+          });
+        }
+      });
+    })(eventItems[i]);
+  }
 
   // アクションアイテムのクリックで企業詳細へ遷移
   const actionItems = _container.querySelectorAll('.action-item[data-company-id]');
@@ -287,7 +295,7 @@ function _attachEventListeners() {
     item.addEventListener('click', () => {
       const companyId = item.dataset.companyId;
       if (companyId) {
-        window.location.hash = `companies?id=${companyId}`;
+        window.location.hash = 'companies?id=' + companyId;
       }
     });
   });

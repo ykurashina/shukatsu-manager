@@ -3,6 +3,7 @@ import { Store, CALENDAR_TYPE_COLORS, STEP_TYPE_OPTIONS, STEP_TYPE_LABELS, EVENT
 import { Modal } from '../components/modal.js';
 import { Toast } from '../components/toast.js';
 import { DateUtils } from '../utils/date.js';
+import { openEventDetailModal } from './event-detail.js';
 
 // ===== 状態 =====
 let currentYear = new Date().getFullYear();
@@ -272,15 +273,15 @@ function renderDayDetail() {
 
   let eventsHTML = '';
 
-  if (dayEvents.length === 0) {
+   if (dayEvents.length === 0) {
     eventsHTML = '<p style="font-size: var(--text-sm); color: var(--text-tertiary); padding: var(--sp-3) 0;">この日の予定はありません。</p>';
   } else {
     for (var ei = 0; ei < dayEvents.length; ei++) {
       var ev = dayEvents[ei];
       var color = ev.color || CALENDAR_TYPE_COLORS[ev.type] || '#94a3b8';
       var typeLabel = CAL_TYPE_LABELS[ev.type] || 'その他';
-      eventsHTML += '<div class="day-event-item" style="border-left-color: ' + color + ';">'
-        + '<div class="day-event-item-content">'
+      eventsHTML += '<div class="day-event-item" style="border-left-color: ' + color + ';" data-cal-event-index="' + ei + '">'
+        + '<div class="day-event-item-content" style="cursor:pointer;">'
         + '<div class="day-event-item-title">' + escapeHTML(ev.title) + '</div>'
         + '<div class="day-event-item-time">' + escapeHTML(typeLabel) + '</div>'
         + '</div>'
@@ -329,6 +330,25 @@ function renderDayDetail() {
         );
       });
     })(deleteBtns[di]);
+  }
+
+  // コンテンツ部分クリックで詳細モーダルを開く
+  var eventItems = panel.querySelectorAll('.day-event-item[data-cal-event-index]');
+  for (var ci = 0; ci < eventItems.length; ci++) {
+    (function(item, events) {
+      var contentArea = item.querySelector('.day-event-item-content');
+      if (contentArea) {
+        contentArea.addEventListener('click', function() {
+          var idx = parseInt(item.getAttribute('data-cal-event-index'), 10);
+          var calEvent = events[idx];
+          if (calEvent) {
+            openEventDetailModal(calEvent, {
+              onDelete: function() { renderCalendar(); renderDayDetail(); }
+            });
+          }
+        });
+      }
+    })(eventItems[ci], dayEvents);
   }
 }
 
