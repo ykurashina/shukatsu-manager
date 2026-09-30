@@ -95,6 +95,21 @@
   flex: 1;
 }
 
+.kanban-card-track {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-1);
+  margin-top: var(--sp-1);
+  flex-wrap: wrap;
+}
+.kanban-card-track-position {
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .kanban-card-body {
   font-size: var(--text-xs);
   color: var(--text-secondary);
