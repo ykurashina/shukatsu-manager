@@ -30,12 +30,28 @@ export class Router {
   }
 
   getCurrentRoute() {
-    return window.location.hash.slice(1) || 'dashboard';
+    var full = window.location.hash.slice(1) || 'dashboard';
+    var qIndex = full.indexOf('?');
+    return qIndex >= 0 ? full.substring(0, qIndex) : full;
+  }
+
+  getRouteParams() {
+    var full = window.location.hash.slice(1) || '';
+    var qIndex = full.indexOf('?');
+    if (qIndex < 0) return {};
+    var paramStr = full.substring(qIndex + 1);
+    var params = {};
+    var pairs = paramStr.split('&');
+    for (var i = 0; i < pairs.length; i++) {
+      var kv = pairs[i].split('=');
+      if (kv[0]) params[decodeURIComponent(kv[0])] = decodeURIComponent(kv[1] || '');
+    }
+    return params;
   }
 
   async _handleRoute() {
-    const hash = this.getCurrentRoute();
-    const viewModule = this._routes[hash];
+    const routeName = this.getCurrentRoute();
+    const viewModule = this._routes[routeName];
 
     if (!viewModule) {
       // 未登録のルート → ダッシュボードにリダイレクト
@@ -64,7 +80,7 @@ export class Router {
 
     // ナビゲーションコールバック
     for (const cb of this._onNavigateCallbacks) {
-      try { cb(hash); } catch (e) { console.error(e); }
+      try { cb(routeName); } catch (e) { console.error(e); }
     }
   }
 }

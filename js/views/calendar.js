@@ -140,22 +140,41 @@ function handleToday() {
 }
 
 function handleGridClick(e) {
-  // セルまたはイベントのクリックを検知
-  const cell = e.target.closest('.calendar-cell');
+  // イベントバーのクリックを検知
+  var eventBar = e.target.closest('.calendar-event');
+
+  // セルを取得
+  var cell = e.target.closest('.calendar-cell');
   if (!cell) return;
 
-  const dateStr = cell.dataset.date;
+  var dateStr = cell.dataset.date;
   if (!dateStr) return;
 
   selectedDate = new Date(dateStr);
 
   // 選択状態のUI更新
-  document.querySelectorAll('.calendar-cell.selected').forEach(el => {
+  document.querySelectorAll('.calendar-cell.selected').forEach(function(el) {
     el.classList.remove('selected');
   });
   cell.classList.add('selected');
 
   renderDayDetail();
+
+  // イベントバーをクリックした場合は詳細モーダルを開く
+  if (eventBar) {
+    var evId = eventBar.getAttribute('data-event-id');
+    if (evId) {
+      var allEvents = Store.getAllEvents();
+      for (var i = 0; i < allEvents.length; i++) {
+        if (allEvents[i].id === evId) {
+          openEventDetailModal(allEvents[i], {
+            onDelete: function() { renderCalendar(); renderDayDetail(); }
+          });
+          break;
+        }
+      }
+    }
+  }
 }
 
 // ===== カレンダーグリッド描画 =====
@@ -226,6 +245,7 @@ function renderCalendar() {
       eventEl.style.backgroundColor = ev.color || CALENDAR_TYPE_COLORS[ev.type] || '#94a3b8';
       eventEl.textContent = ev.title;
       eventEl.title = ev.title; // ツールチップ
+      eventEl.setAttribute('data-event-id', ev.id);
       cell.appendChild(eventEl);
     });
 

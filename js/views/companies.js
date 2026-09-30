@@ -390,6 +390,62 @@ export function init() {
 
   // データ変更監視
   _unsubscribe = Store.onDataChange(() => renderTable());
+
+  // URLパラメータから企業詳細モーダルを自動表示
+  _handleUrlParams();
+}
+
+// ---------------------
+// URLパラメータ処理
+// ---------------------
+function _handleUrlParams() {
+  var full = window.location.hash.slice(1) || '';
+  var qIndex = full.indexOf('?');
+  if (qIndex < 0) return;
+  var paramStr = full.substring(qIndex + 1);
+  var params = {};
+  var pairs = paramStr.split('&');
+  for (var i = 0; i < pairs.length; i++) {
+    var kv = pairs[i].split('=');
+    if (kv[0]) params[decodeURIComponent(kv[0])] = decodeURIComponent(kv[1] || '');
+  }
+
+  var companyId = params.id;
+  if (!companyId) return;
+  var company = Store.getCompany(companyId);
+  if (!company) return;
+
+  // URLをクリーンに戻す（モーダル開いた後は不要）
+  setTimeout(function() {
+    history.replaceState(null, '', '#companies');
+  }, 100);
+
+  // editStep=xxx → ステップ編集モーダルを開く
+  if (params.editStep) {
+    var step = Store.getStep(params.editStep);
+    if (step) {
+      setTimeout(function() {
+        openStepFormModal(companyId, step.trackId || null, params.editStep);
+      }, 200);
+      return;
+    }
+  }
+
+  // editEvent=xxx → イベント編集モーダルを開く
+  if (params.editEvent) {
+    var evt = Store.getEvent(params.editEvent);
+    if (evt) {
+      setTimeout(function() {
+        openEventFormModal(companyId, params.editEvent);
+      }, 200);
+      return;
+    }
+  }
+
+  // id=xxx のみ → 企業詳細モーダルを開く
+  setTimeout(function() {
+    openCompanyDetailModal(companyId);
+  }, 200);
 }
 
 // ---------------------
